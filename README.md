@@ -22,21 +22,37 @@ And the following engineering optimizations
 
 Dense transformer models (i.e. alternating multi-head attention (MHA) and multilayer perceptron (MLP) blocks) have dominated the DL model space for a long time. The reason for this is simple: 
 1. MHA computes exact cross-sequence dependencies, and consists of GEMMs, which are easy to parallelize across many GPU SMs
-2. MLPs mix the heads of MHA, and trivially boil down to GEMMs
+2. MLPs mix the heads of MHA and perform per-token processing, and trivially boil down to GEMMs
 
 Lots of LLM blocks (e.g. MHA, MLPs, RWKV, Mamba, KANs, xLSTM, etc) boil down to perform very similar modeling tasks. We at Zyphra intuit that the ingredients for a good LLM architecture are:
-- Modeling cross-sequence dependencies (MHA, TODO BEREN/PAOLO ADD IN COMPONENTS OF OTHER BLOCKS THAT DO THIS)
-- Mixing across heads (MLPs, KANs, TODO BEREN/PAOLO ADD IN COMPONENTS OF OTHER BLOCKS THAT DO THIS)
+- Mixing information across the sequence (MHA, Mamba, RWKV sequence mixers)
+- Updating representations per token (MLPs, KANs, Mamba in/out projectors and gates)
+
+Typically, these components are alternated so that the sequence is mixed, the per-token representations are updated, the sequence is mixed again etc. A careful balance of sequence and token mixing is required for good performance. 
 
 Therefore, potential LLM architectures should be evaluated on whether they:
-1. Have lower FLOP and memory requirements. We believe this is most important at [inference-time](TODO: mosaicml paper), but  
-2. Maintain the benefits of exact cross-sequence modeling from MHA (can be measured by proxy via [long-context reasoning](TODO) and [in-context learning](TODO)), since 
+1. Have lower FLOP and memory requirements. We believe this is most important at [inference-time](TODO: mosaicml paper), but also helps training.
+2. Maintain the benefits of exact cross-sequence modeling from MHA (can be measured by proxy via [long-context reasoning](TODO) and [in-context learning](TODO)), and general language modelling evaluations)
+
 
 The deployment context determines which of these properties is most important, for example:
-1. Massive (100B-1T+) capabilities-focused models like Grok, Claude, and ChatGPT. These models have high parameter-counts (and therefore require more training tokens to saturate) and are deployed on cloud systems with high-VRAM GPUs. This is why the low-FLOP and high-VRAM tradeoff of MoE is attractive.
+
+1. Massive (100B-1T+) capabilities-focused models like Grok, Claude, and ChatGPT. These models have high parameter-counts (and therefore require more training tokens to saturate) and are deployed on cloud systems with high-VRAM GPUs (and often split between GPUs). This is why the low-FLOP and high-VRAM tradeoff of MoE is attractive.
 2. Smaller (1B-15B) on-device special-purpose models like Zamba and Phi. These models require the lowest memory and latency at inference-time possible, and are deployed on embedded devices with strict power and memory constraints. Therefore they benefit more from SSM and hybrid architectures.
 
-Since Zyphra seeks to build personalized on-device models, this cookbook will be focused on the practical implications of architectures falling into the smaller-model regime #2.
+For larger models, the primary determinant of performance is [scale](https://arxiv.org/abs/2203.15556) in terms of parameters and data which reduces the importance of architectural changes except insofar as they change the scaling law coefficients. However, at smaller scales when e.g. the parameter count is fixed by hard memory limitations, architectural efficiencies which give constant improvements to performance at a given scale become important and can enable models to significantly outperform for a given inference flop and memory budget. This effect is also seen in training where superior architecture enables models to compete with standard transformers which are trained on significantly more tokens (requiring significantly more flops) since training far past chinchilla optimal models at fixed size runs into strongly sublinear scaling. 
+
+Since Zyphra seeks to build personalized on-device models, this cookbook will be focused on the practical implications of architectures falling into the smaller-model regime #2. We also focus heavily on architectural innovations to maximize the loss-decrease per parameter and per inference flop. 
+
+The key current focus of innovation is on the sequence mixer. This is because attention is expensive at long sequence lengths while MLPs appear close to maximal efficiency. While much is still uncertain, there appears to be converging evidence that alternative linear attention variants such as Mamba, RWKV, RetNet perform well at short context language modelling while being lacking at long-context reasoning, information retrieval, and in-context learning. However, despite this slight deficit on some aspects of performance, they are significantly more FLOP and memory efficient than attention layers.
+
+This motivates a hybrid architecture which mixes attention and linear sequence mixers such as Mamba. This way, the majority of the sequence mixers are more efficient than attention while just enough full attention is used to maintain performance. Empirically, it appears that full attention is not needed every single sequence mixer but that substantially less attention can be used, which is what enables hybrids to work empirically. The likely reason for this relates to the data distirbution. Natural language is often surprisingly predictable from primarily local correlations -- i.e. see the surprising effectiveness of pure N-gram models. However, occasionally, there is long-term information retrieval or other in-context learning required which a smaller number of attention layers can handle. In our experiments, we observe that between only 1/4 or 1/6 sequence mixer layer should be full attention, a phenomenon also reported [here](https://arxiv.org/abs/2403.17844). 
+
+
+
+We observe that b
+
+
 
 (TODO: Dropdown on cross-sequence dependencies, and what I mean by "exact")
 
