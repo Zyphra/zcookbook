@@ -68,7 +68,7 @@ The MoE typically splits the MLP parameters into E parallel copies. This expands
 
 The way to think about the FLOP budget is to figure out how many TFLOPS you can get per GPU running the model and then how many days you can afford to train the model for. That is, we get
 
-##\begin{align}
+$$\begin{align}
 \text{FLOP budget} = \text{TFLOPs per GPU} \times \text{NUM GPUs} \times \text{Days} \times 24 \times 60 \times 60
 \end{align}$$
 
