@@ -135,6 +135,20 @@ We additionally find, following [miniCPM](https://arxiv.org/html/2404.06395v1) t
 
 We performed significant ablations to optimize the learning rate schedule. Overall, we observed that the precise form of the LR decay (whether linear, cosine, or exponential) has relatively little effect on the outcome. We observed that the primary determinant of performance was the initial maximum learning rate of the annealing phase. Unlike miniCPM, we found that re-warming up the learning rate to a large percentage (approximately 75%) of the original learning rate for the run over a few thousand steps and then decaying outperformed starting at the original final learning rate for the run. After many ablations, we believe this is due to the fact that rewarming causes a significantly faster decay at the beginning of the annealing phase since the decay occurs over a much greater range in the same number of tokens.
 
+When doing annealing we find it is important to maintain a high 'replay fraction' of tokens from the original dataset to stabilize training and maintain performance. We typically find that a replay fraction of 50-70% tokens from the original dataset and 50-30% tokens from the annealing datasets is optimal. Within this range there we find that the sensitivity to the exact replay fraction is quite low.
+
+In terms of the amount of annealing data, we find in general that more is better, although we are generally constrained by amount of available annealing data so that we have not been able to test truly large (>200B tokens) amounts of such data. This fits with the miniCPM findings of setting annealing to be about 10% of the total tokens of a run. We find that multipoe epochs of annealing data do not appear to harm performance but beyond 2 epochs give little performance improvement. 
+
+Concretely, our reccomendations for annealing are:
+
+1.) Generate as big a dataset of high quality tokens as possible up to likely about 10-15% of the total pretraining token budget
+
+2.) Anneal with a replay fraction of between 50-70% original tokens
+
+3.) Decay shape does not matter that much (cosine is fine)
+
+4.) Use a max lr about 75% of original max lr for the phase 1 pretraining and a linear warmup from 0 to this maxlr over a few thousand steps
+
 
 ## Bonus: Efficient Decoding
 (TODO: Vasu/Jon)
