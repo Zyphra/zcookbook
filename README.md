@@ -123,7 +123,7 @@ In this cookbook, we provide framework-level benchmarks in Jax at TODO
 
 # Training
 
-
+We perform all our training using PyTorch and our custom internal fork of [MegatronLM](https://arxiv.org/abs/1909.08053). For smaller models we only need to utilize data-parallelism (DP) combined with Zero-1 to shard optimizer states. For larger models such as Zamba-7B, we utilized tensor-parallelism (TP) for which we created our own TP implementation in both Mamba and Mamba2. We also utilized expert-parallelism (EP) for training BlackMamba. 
 
 ## Annealing
 We additionally find, following [miniCPM](https://arxiv.org/html/2404.06395v1) that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 'High quality' is obviously subjective in part but these typically include fact-rich information such as Wikipedia and arxiv papers, instruction following and chat data as well as synthetic fact-enhanced textbook style data such as [cosmopedia](https://huggingface.co/blog/cosmopedia). We find that upweighting these datasets while also rapidly decaying the learning rate towards the end of training results in performance increases and a superior output quality of the model.
