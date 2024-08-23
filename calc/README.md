@@ -69,6 +69,7 @@ The way to think about the FLOP budget is to figure out how many TFLOPS you can 
 
 ##\begin{align}
 \text{FLOP budget} = \text{TFLOPs per GPU} \times \text{NUM GPUs} \times \text{Days} \times 24 \times 60 \times 60
+\end{align}$$
 
 Where we convert days into seconds since TFLOPs are in seconds. As an example, let’s suppose (optimistically) that we get 400 TFLOPs/H100, we have 64 H100s, and we train for 60 days, we get a budget of 132M TFLOPs.
 
