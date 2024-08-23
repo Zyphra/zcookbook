@@ -128,7 +128,7 @@ In this cookbook, we provide framework-level benchmarks in Jax at TODO
 ## Annealing
 We additionally find, following [miniCPM](https://arxiv.org/html/2404.06395v1) that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 'High quality' is obviously subjective in part but these typically include fact-rich information such as Wikipedia and arxiv papers, instruction following and chat data as well as synthetic fact-enhanced textbook style data such as [cosmopedia](https://huggingface.co/blog/cosmopedia). We find that upweighting these datasets while also rapidly decaying the learning rate towards the end of training results in performance increases and a superior output quality of the model.
 
-We performed significant ablations to optimize the learning rate schedule. Overall, we observed that 
+We performed significant ablations to optimize the learning rate schedule. Overall, we observed that the precise form of the LR decay (whether linear, cosine, or exponential) has relatively little effect on the outcome. We observed that the primary determinant of performance was the initial maximum learning rate of the annealing phase. Unlike miniCPM, we found that re-warming up the learning rate to a large percentage (approximately 75%) of the original learning rate for the run over a few thousand steps and then decaying outperformed starting at the original final learning rate for the run. After many ablations, we believe this is due to the fact that rewarming causes a significantly faster decay at the beginning of the annealing phase since the decay occurs over a much greater range in the same number of tokens.
 
 
 ## Bonus: Efficient Decoding
