@@ -64,6 +64,36 @@ Naively, we thus see that the MLP cost dominates at least as long as the embeddi
 
 The MoE typically splits the MLP parameters into E parallel copies. This expands the number of parameters but does not appreciably change the FLOP cost of a step of the model, so long as only a single expert is used per token per MLP block.
 
+## Mamba parameters
+
+We now consider computing the parameter and flops of a single Mamba1 and Mamba2 block. First we handle parameters. For Mamba1 these calculations can also be found in the Appendix of our [BlackMamba paper](https://arxiv.org/abs/2402.01771).
+
+### Mamba1 parameters
+
+This refers to the original Mamba block as introduced [here](https://arxiv.org/pdf/2312.00752). A Mamba block takes input from the residual stream of size $D \times S$ where D is the embedding dimension and L is the sequence length. The mamba block also has an internal expansion factor (typically of 2) where it operates in a larger internal embedding dimension we denote I. The Mamba block also contains an internal causal-convolutional layer with kernel width C and an internal SSM state of size S. Finally, the Mamba layer has a dt projection which controls the size of the small MLP which is used to set the token-wise time-constant for the SSM.
+
+The Mamba layer begins with two input projections of size $$D \times I$$ which map the residual stream input into the inner dimension. There are two projections one for the SSM input itself and secondly for the gate input. This gives a total of $$2ID$$ in-projector parameters. After the in-projector there is a convolutional layer prior to the SSM. This requires $$C \times I$$ parameters plus an additional $$I$$ parameters for the convolutional bias. 
+
+This is then followed by the matrices producing the A,B, and C matrices of the SSM (similar to the QKV matrices of attention). Each of these matrices is of size $$I \times S$$ resulting in $$3IS$$ parameters. Additionally, there is the dt projector which consists of $$2 \times dt \times I$$ as well as a dt bias and the D bias vector both of length $$I$$. Finally, there is the SSM outprojector of size $$I \times D$$ which maps back to the embedding dimension of the residual stream, as well as the input layernorm which contains $2 \times D$$ parameters since its gain and bias parameters are both of shape $$D$$. 
+
+Putting this all together, we obtain the following count of total parameters:
+
+$$\begin{align}
+\text{Total parameters} = 3ID + 2I(S + dt + \frac{C}{2}) + I + 2D
+\end{align}$$
+
+## Mamba2 parameters
+
+The Mamba2 block (introduced [here](https://arxiv.org/abs/2405.21060)) introduces a few modifications to the Mamba1 block to improve flop efficiently. These primarily consist in making the A matrix scalar instead of diagonal and making the B,C,dt matrices depend directly on the input from the residual stream instead of first passing through the convolution. It also introduces the notion of heads, similar to attention heads, and groups which are similar to the repeated heads in GQA. We denote the number of groups as G and the number of heads as H.
+
+We begin by computing the in-projector as before. This consists of the input and gate projections of shape $$D \times I$$ each as well as the B and C matrices of shape $$S \times G$$ each and the dt projection of shape $$H$$ (dt is now a scalar per Mamba head). There are also the A and D matrices of shape $$H$$.
+
+The in-projector is followed by the convolution which is applied to the x, B, and C matrices. The total parameters for the convolution are thus $$I + 2GS \times C$$.  and the convolutional bias of shape $$I + 2GS$$. Following the convolution, unlike Mamba1 there is also an additional SSM internal layernorm which utilizes $$2I$$ parameters. Following the SSM, there is then the out-projector matrix which is of size $$I \times D$$. Putting this all together, we obtain an expression for the parameters in a Mamba2 layer as:
+
+$$\begin{align}
+\text{Total parameters} = 3ID + 2DGS + DH + 2H + (I + 2GS)(1 + C) + I
+\end{align}$$
+
 ## FLOP budgets
 
 The way to think about the FLOP budget is to figure out how many TFLOPS you can get per GPU running the model and then how many days you can afford to train the model for. That is, we get
