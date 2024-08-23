@@ -56,6 +56,7 @@ Putting this together, we see that the total FLOP cost of a transformer model ca
 
 $$\begin{align}
 \text{FLOPS per step} = 12bhs^2 + 72blsh^2
+\end{align}$$
 
 Naively, we thus see that the MLP cost dominates at least as long as the embedding dimension h is larger than the sequence dimension s. For large enough s however, the cost of the attention begins to dominate due to the quadratic dependence of attention on the sequence length.
 
