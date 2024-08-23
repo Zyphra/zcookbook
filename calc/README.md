@@ -19,7 +19,7 @@ Now that we have the parameters per block we simply have to add them up and mult
 Then finally we add in the final layernorm with $$2h$$ parameters and the position embedding with $$sh$$ parameters and we are done. This gives a final equation of:
 
 $$\begin{align}
-\text{total_params} = Vh + sh + 12lh^2 + 8hl + 2h
+\text{total params} = Vh + sh + 12lh^2 + 8hl + 2h
 \end{align}$$
 
 
@@ -32,7 +32,7 @@ The key difference between MoE and dense models is that each MLP layer instead b
 Since a MoE is otherwise identical to a transformer except each MLP is copied E times, this means that we simply multiply the MLP component $$8lh^2$$ by the number of experts to get $$8Elh^2$$. There is also a routing layer of size $$E \times h$$ at each block to decide which expert to route the token to. This gives a total of $$Ehl$$ parameters due to the router. Thus the updated equation for the MoE transformer reads:
 
 $$\begin{align}
-\text{total_params} = Vh + sh + 4hl^2 + 8ELh^2 + Ehl + 8hl + 2h
+\text{total params} = Vh + sh + 4hl^2 + 8ELh^2 + Ehl + 8hl + 2h
 \end{align}$$
 
 
