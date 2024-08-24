@@ -52,7 +52,7 @@ if __name__ == "__main__":
     )
 
     logging.info("Computing total number of tokens")
-    n_tok = sum(ds_tok["n_toks"])
+    n_tok = sum(ds_tok["n_tokens"])
     logging.info(f"Total number of tokens: {n_tok}")
 
     if args.save_path:
