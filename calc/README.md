@@ -107,6 +107,15 @@ $$\begin{align}
 \text{Total FLOPS} = BLI(11S + 4dt + 1)
 \end{align}$$
 
+## Mamba2 FLOPS
+
+Computing the flops of a Mamba2 block involves going through a similar exercise. First we consider the much-enlarged in-projector of Mamba2 which is of shape $$(2I + 2GS + H) \times D$$ which is multiplied by the embedding input of size $$B \times L \times D$$. This results in $$2BL(2I + 2GS + H)D$$ FLOPS. The in-projector is then split and only the xBC matrix is passed through the conv at the FLOP cost of $$2BL(I + 2GS)C$$. Following the conv there is the computation of the ssm state matrices and multiplication by dt which costs $$2BLIS$$ FLOPS$$ and the SSM computation itself which also costs $$2BLIS$$ FLOPs. Finally, there is the out-projector matrix which costs $$2BLSD$$ and the multiplication by the gate which costs $$BLD$$. Putting this all together we obtain:
+
+$$\begin{align}
+\text{Total FLOPS} = BL\Big(4ID + 2GSD + 2HD + 2IC + 4GSC + 4IS + 2SD + D\Big)
+\end{align}$$
+
+
 
 
 
