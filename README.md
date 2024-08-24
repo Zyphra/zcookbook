@@ -71,23 +71,21 @@ Dense transformers, characterized by their alternating multi-head attention (MHA
 Mixture of Experts (MoE) architectures introduce a level of sparsity by routing different tokens or sequences to different subsets of experts. This approach allows for a trade-off between model capacity and computational efficiency, making it particularly appealing for large-scale models deployed on high-VRAM GPUs.
 
 ![MoE Transformer](transformer-moe.png)
-![BlackMamba](blackmamba.png)
+![BlackMamba](mamba-moe.png)
 
 ### SSM Architectures
 
 State Space Models (SSM) offer a more efficient alternative to traditional attention mechanisms, particularly beneficial for smaller models deployed on devices with strict power and memory constraints. Models like Mamba and RWKV leverage these architectures to achieve competitive performance with significantly lower FLOP and memory requirements.
 
 ![Mamba](mamba.png)
-![RWKV](rwkv.png)
 
 ### Hybrid Architectures
 
 Hybrid architectures combine the strengths of both dense transformers and SSMs. By integrating elements of full attention with more efficient linear sequence mixers, these models aim to balance performance with computational efficiency. Zyphra's Zamba and Jamba models are prime examples of this approach, demonstrating the potential of hybrid architectures in various applications.
 
-![alt text](image.png)
-
-![Zamba](zamba.png)
-![Jamba](jamba.png)
+![Zamba-2.7B](zamba2-2p7b.png)
+![Zamba-1.2B](zamba2-1p2b.png)
+![Zamba-7B](zamba-7b.png)
 
 Each of these architectures is illustrated below to provide a visual understanding of their structure and components. The figures have been optimized to appear well-balanced and readable, ensuring they serve as effective visual aids in understanding the complexities of each model architecture.
 
