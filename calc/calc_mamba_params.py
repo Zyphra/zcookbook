@@ -89,17 +89,6 @@ def compute_mamba_block_params(args):
     mamba_block_params += 2 * args.d_model                     # LayerNorm
     return mamba_block_params, dt_rank
 
-def compute_gateconv_block_params(args):
-    d_inner = args.d_model * args.gateconv_expansion_factor
-    
-    gateconv_params = args.d_model * 2 * d_inner                     # W_xz
-    gateconv_params += 2 * args.d_model                              # input layernorm
-    gateconv_params +=  (args.d_conv * d_inner) + d_inner       # conv
-    gateconv_params += 4 * d_inner * d_inner                    # attention QKVO
-    gateconv_params += d_inner * args.d_model                   # W_out
-    return gateconv_params
-
-
 # calculates the params of a model given their hparams
 def calc_params(args):
     if args.swiglu:
@@ -122,16 +111,10 @@ def calc_params(args):
             total_ffn_params = 0
             ffn_block_params = 0
             total_expert_params = 0
-            if args.gateconv_model:
-                total_params = (args.num_layers * gateconv_block_params) + embedding_params
-                mamba_block_params = total_params
-            else:
-                total_params = args.num_layers * mamba_block_params + embedding_params
-                mamba_block_params = total_params
+            total_params = args.num_layers * mamba_block_params + embedding_params
+            mamba_block_params = total_params
 
         else:
-            if args.gateconv_model:
-                raise ValueError("Gateconv MoE not currently supported")
             if not args.parallel_moe:
                 mamba_block_params = int(round((args.num_layers * mamba_block_params) * (1 - (1/args.expert_interval))))
             else:
@@ -167,9 +150,6 @@ def calc_params(args):
                 total_params += attention_block_params
                 forward_pass_params += attention_block_params
                 total_attention_params += attention_block_params
-            elif el == 'g':
-                total_params += gateconv_block_params
-                forward_pass_params += gateconv_block_params
             elif el.isnumeric():
                 num_experts = int(el)
                 total_params  += num_experts * ffn_block_params
