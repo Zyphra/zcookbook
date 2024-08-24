@@ -94,6 +94,22 @@ $$\begin{align}
 \text{Total parameters} = 3ID + 2DGS + DH + 2H + (I + 2GS)(1 + C) + I
 \end{align}$$
 
+## Mamba Flops
+
+In general, given two matrices $$A^{K \times M}$$ and $$B^{M \times J}$$ the total flops of computing their matrix product is $$2KMJ$$ where the 2 comes from the fact that there is both a multiple and an addition operation. 
+
+Let us consider the in and out projectors of Mamba. These are matrices of shape $I \times D$ being multipled with input of shape $B \times L \times D$ and there are three such matrix multiplications $$W_x, W_z, W_y$$ resulting in $$6BLID$$ FLOPS. Next is the convolution which can be treated as a single $$I \times C$$ matrix multiply requiring $$2BLIC$$ FLOPs. 
+
+Now, we turn to the SSM block itself. We first compute the input-dependent B and C matrices requiring a matrix multiply of shape $$I \times H$$ each thus resulting in $$4BLIS$$ FLOPs. The A matrix is not multiplied by the input but goes through an elementwise transform costing $$BLIS$$ FLOPs. The dt projection first goes through an elementwise operation of order $$BLI$$ FLOPs.
+Next, the discretization. The A matrix is multiplied by the dt vector resulting, costing $$BLIS$$ FLOPs. The B matrix is multiplied by the input costing $$2BLIS$$ FLOPs. The SSM linear state space step itself is just a matrix multiply and add so costs $$2BLIS$$ FLOPs, and then the output projection using the C matrix also costs $$2BLIS$$ FLOPs. Putting this all together, we obtain the following expression:
+
+$$\begin{align}
+\text{Total FLOPS} = BLI(11S + 4dt + 1)
+\end{align}$$
+
+
+
+
 ## FLOP budgets
 
 The way to think about the FLOP budget is to figure out how many TFLOPS you can get per GPU running the model and then how many days you can afford to train the model for. That is, we get
