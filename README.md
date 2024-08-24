@@ -58,20 +58,24 @@ Beyond this, in later Zamba2 models we also applied LoRAs to the shared layers. 
 
 # Model Architectures
 
-In this section, we delve into the various model architectures that Zyphra has explored and implemented, each designed to address specific challenges and leverage unique advantages in the realm of hybrid models.
+Let's talk about model architectures. Why do we think hybrids offer the best model quality per training/inference FLOP?
 
 ### Dense Transformers
 
-Dense transformers, characterized by their alternating multi-head attention (MHA) and multilayer perceptron (MLP) blocks, have been a cornerstone in the development of large language models. These architectures excel in computing exact cross-sequence dependencies and are highly parallelizable, making them a popular choice for many applications.
+Dense transformers, are primarily composed of alternating multi-head attention (MHA) and multilayer perceptron (MLP) blocks. We believe dense transformers have the following shortcomings:
+1. The attention operation is still not efficient at long sequence lengths, despite recent [single-GPU efforts](https://arxiv.org/abs/2205.14135) and [distributed context efforts](https://arxiv.org/abs/2408.04093)
+2. Attention blocks are correlated across depth, which is a waste of parameters and FLOPs
 
 
 ### MoE Architectures
 
-Mixture of Experts (MoE) architectures introduce a level of sparsity by routing different tokens or sequences to different subsets of experts. This approach allows for a trade-off between model capacity and computational efficiency, making it particularly appealing for large-scale models deployed on high-VRAM GPUs.
+Mixture of Experts (MoE) architectures introduce a router block that splits the input sequence(s) to appropriate MLP experts on a per-token basis. While the MoE has the inference latency of its forward-pass parameters, all parameters need to be loaded into memory.
 
-### SSM Architectures
+### SSM/RNN Architectures
 
-State Space Models (SSM) offer a more efficient alternative to traditional attention mechanisms, particularly beneficial for smaller models deployed on devices with strict power and memory constraints. Models like Mamba and RWKV leverage these architectures to achieve competitive performance with significantly lower FLOP and memory requirements.
+State Space Models (SSM) offer a more efficient alternative to traditional attention mechanisms, particularly beneficial for smaller models deployed on devices with strict power and memory constraints. Models like [Mamba](https://arxiv.org/abs/2312.00752) and [RWKV](https://arxiv.org/abs/2305.13048) leverage these architectures to achieve competitive performance with significantly lower FLOP and memory requirements.
+
+However, the exact cross-sequence dependencies of attention is hard to beat, and models without attention can require significantly more tokens to match the performance of attention-based models (https://arxiv.org/abs/2406.07887, https://huggingface.co/tiiuae/falcon-mamba-7b). Whether such attention-free models can ever fully match the performance of attention-based models on specific tasks like in-context learning and long-context reasoning is an open question.
 
 
 **Transformer**             |  **Mamba**   |  **Transformer-MoE**  |  **Mamba-MoE**
@@ -82,10 +86,7 @@ State Space Models (SSM) offer a more efficient alternative to traditional atten
 
 ### Hybrid Architectures
 
-Hybrid architectures combine the strengths of both dense transformers and SSMs. By integrating elements of full attention with more efficient linear sequence mixers, these models aim to balance performance with computational efficiency. Zyphra's Zamba and Jamba models are prime examples of this approach, demonstrating the potential of hybrid architectures in various applications.
-
-
-Each of these architectures is illustrated below to provide a visual understanding of their structure and components. The figures have been optimized to appear well-balanced and readable, ensuring they serve as effective visual aids in understanding the complexities of each model architecture.
+Dense hybrid architectures combine the strengths of both dense transformers and SSMs. They don't introduce the memory overhead of MoEs, maintain the exact cross-sequence dependencies of attention, and have inference latency of SSMs.
 
 **Zamba-7B**    |    **Zamba2-2.7B**       |  **Zamba2-1.2B**
 :-------------------------:|:-------------------------:|:-------------------------:
