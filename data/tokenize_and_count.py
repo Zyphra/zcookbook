@@ -33,7 +33,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logging.info("Loading the dataset")
-    ds = datasets.load_dataset(path=args.hf_path, data_dir=args.hf_dir)
+    ds = datasets.load_dataset(
+        path=args.hf_path,
+        data_dir=args.hf_dir,
+        num_proc=args.num_proc,
+        split="train",
+        trust_remote_code=True
+    )
     
     logging.info("Loading the tokenizer")
     tokenizer = AutoTokenizer.from_pretrained(args.hf_tokenizer)
