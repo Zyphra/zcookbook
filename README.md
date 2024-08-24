@@ -31,7 +31,6 @@ Therefore, potential LLM architectures should be evaluated on whether they:
 1. Have lower FLOP and memory requirements. We believe this is most important at [inference-time](https://arxiv.org/pdf/2401.00448v1), but also helps training.
 2. Maintain the benefits of exact cross-sequence modeling from MHA (can be measured by proxy via [long-context reasoning](https://arxiv.org/abs/2406.07887) and [in-context learning](https://arxiv.org/abs/2402.03170), and general language modelling evaluations)
 
-
 The deployment context determines which of these properties is most important, for example:
 
 1. Massive (100B-1T+) capabilities-focused models like Grok, Claude, and ChatGPT. These models have high parameter-counts (and therefore require more training tokens to saturate) and are deployed on cloud systems with high-VRAM GPUs (and often split between GPUs). This is why the low-FLOP and high-VRAM tradeoff of MoE is attractive.
@@ -43,10 +42,19 @@ Since Zyphra seeks to build personalized on-device models, this cookbook will be
 
 The key current focus of innovation is on the sequence mixer. This is because attention is expensive at long sequence lengths while MLPs appear close to maximal efficiency. While much is still uncertain, there appears to be converging evidence that alternative linear attention variants such as Mamba, RWKV, RetNet perform well at short context language modelling while being lacking at long-context reasoning, information retrieval, and in-context learning. However, despite this slight deficit on some aspects of performance, they are significantly more FLOP and memory efficient than attention layers.
 
-This motivates a hybrid architecture which mixes attention and linear sequence mixers such as Mamba. This way, the majority of the sequence mixers are more efficient than attention while just enough full attention is used to maintain performance. Empirically, it appears that full attention is not needed every single sequence mixer but that substantially less attention can be used, which is what enables hybrids to work empirically. The likely reason for this relates to the data distirbution. Natural language is often surprisingly predictable from primarily local correlations -- i.e. see the surprising effectiveness of pure N-gram models. However, occasionally, there is long-term information retrieval or other in-context learning required which a smaller number of attention layers can handle. In our experiments, we observe that between only 1/4 or 1/6 sequence mixer layer should be full attention, a phenomenon also reported [here](https://arxiv.org/abs/2403.17844). 
+This motivates a hybrid architecture which mixes attention and linear sequence mixers such as Mamba. This way, the majority of the sequence mixers are more efficient than attention while just enough full attention is used to maintain performance. Empirically, it appears that full attention is not needed every single sequence mixer but that substantially less attention can be used, which is what enables hybrids to work empirically. A similar findings have also recently been popularized applied to transformers with some recent models such as those used by [CharacterAI](https://blog.character.ai/optimizing-ai-inference-at-character-ai/) claiming to alternate sliding-window-attention over a small window and full attention blocks. This has an equivalent effect of using cheap local sequence mixers and occasionally full attention but is less efficient than Mamba since sliding-window-attention is less efficient per FLOP than a Mamba block. The likely reason for this relates to the data distirbution. Natural language is often surprisingly predictable from primarily local correlations -- i.e. see the surprising effectiveness of pure N-gram models. However, occasionally, there is long-term information retrieval or other in-context learning required which a smaller number of attention layers can handle. In our experiments, we observe that between only 1/4 or 1/6 sequence mixer layer should be full attention, a phenomenon also reported [here](https://arxiv.org/abs/2403.17844). 
 
-We observe that b
+## Reasoning behind the Zamba architecture
 
+While several other works, such as [Jamba](https://huggingface.co/ai21labs/Jamba-v0.1), have explored SSM hybrid models at scale, with Zamba we have further improved the architecture on a performance-per-parameter metric. We have done this by utilizing a parameter-sharing scheme whereby a single transformer block consisting of an attention and a MLP block is re-used multiple times throughout the network. This comprises the only attention in the network. This increases the performance of the network for a given parameter count at the expense of additional flops for the multiple invocations of the shared parameters. However, given the inherent flop efficiency of our Mamba backbone, the end result is an architecture that outperforms transformers in both equi-token and equi-flop conditions.
+
+What the success of this architecture implies is that even when attention is used rarely, there is still a great redundancy in the attention parameters -- namely that the vast majority of them are not needed. While sequencing mixing via full MHA is necessary regularly, somehow the attention block itself does not have to have separate parameters. We conjecture that this means that in fact the attention is primarily needed to 'remind' the network of the past sequence in a few stereotyped ways and not necessarily to perform novel sequence mixing operations at every attention block. In any case, the Zamba architecture exploits this regularity to reduce the parameter count of the model for a given level of performance.
+
+An additional change we made to the architecture, which turned out to be surprisingly important, is to concatenate the original text embeddings with the current layer embeddings at every shared attention block. We found this provided the biggest boost (other than the shared layer) to performance per parameter, while again increasing FLOPs slightly. We conjecture that but doing this, we are effectively 'reminding' the network continually of what the input tokens are while otherwise the processing in the residual stream may 'forget' them or be unable to retrieve them in a different context than they were originally processed. While in theory the residual stream itself was originally designed to ameliorate this type of forgetting, the fact that this concatenation approach works implies it is not entirely successful. 
+
+Beyond this, in later Zamba2 models we also applied LoRAs to the shared layers. This allows us to further specialize the shared blocks which slightly improves performance at a very small parameter cost. Using LoRAs in this way during pretraining is unusual and we believe it is an underexplored avenue for creating extremely parameter-efficient models.
+
+(TODO: Dropdown on cross-sequence dependencies, and what I mean by "exact")
 
 # Model Architectures
 
@@ -94,7 +102,7 @@ For a script on calculating the number of tokens in a TODO-formatted dataset bas
 
 # Calculations
 
-During the model planning phase, it's common to calculate what models will fit into a given budget of parameters, FLOPs, and inference/training memory. 
+During the model planning phase, it's common to calculate what models will fit into a given budget of parameters, FLOPs, and inference/training memory. In this cookbook we present scripts we use internally to compute the parameters and FLOPs for a given model architecture and sizing. We see this as an extension of the [EleutherAI cookbook](TODO) but specialized to SSMs and hybrid models.
 
 ## SSM Calculations
 (TODO: Quentin/Beren/Paolo)
@@ -134,7 +142,7 @@ In this cookbook, we provide framework-level benchmarks in Jax at TODO
 
 # Training
 
-
+We perform all our training using PyTorch and our custom internal fork of [MegatronLM](https://arxiv.org/abs/1909.08053). For smaller models we only need to utilize data-parallelism (DP) combined with Zero-1 to shard optimizer states. For larger models such as Zamba-7B, we utilized tensor-parallelism (TP) for which we created our own TP implementation in both Mamba and Mamba2. We also utilized expert-parallelism (EP) for training BlackMamba. 
 
 ## Annealing
 We additionally find, following [miniCPM](https://arxiv.org/html/2404.06395v1) that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 'High quality' is obviously subjective in part but these typically include fact-rich information such as:
@@ -142,9 +150,21 @@ We additionally find, following [miniCPM](https://arxiv.org/html/2404.06395v1) t
 - Instruction following and chat data 
 - Synthetic fact-enhanced textbook style data such as [cosmopedia](https://huggingface.co/blog/cosmopedia).
 
-We find that upweighting these datasets while also rapidly decaying the learning rate towards the end of training results in performance increases and a superior output quality of the model.
+We performed significant ablations to optimize the learning rate schedule. Overall, we observed that the precise form of the LR decay (whether linear, cosine, or exponential) has relatively little effect on the outcome. We observed that the primary determinant of performance was the initial maximum learning rate of the annealing phase. Unlike miniCPM, we found that re-warming up the learning rate to a large percentage (approximately 75%) of the original learning rate for the run over a few thousand steps and then decaying outperformed starting at the original final learning rate for the run. After many ablations, we believe this is due to the fact that rewarming causes a significantly faster decay at the beginning of the annealing phase since the decay occurs over a much greater range in the same number of tokens.
 
-We performed significant ablations to optimize the learning rate schedule. Overall, we observed that TODO
+When doing annealing we find it is important to maintain a high 'replay fraction' of tokens from the original dataset to stabilize training and maintain performance. We typically find that a replay fraction of 50-70% tokens from the original dataset and 50-30% tokens from the annealing datasets is optimal. Within this range there we find that the sensitivity to the exact replay fraction is quite low.
+
+In terms of the amount of annealing data, we find in general that more is better, although we are generally constrained by amount of available annealing data so that we have not been able to test truly large (>200B tokens) amounts of such data. This fits with the miniCPM findings of setting annealing to be about 10% of the total tokens of a run. We find that multipoe epochs of annealing data do not appear to harm performance but beyond 2 epochs give little performance improvement. 
+
+Concretely, our reccomendations for annealing are:
+
+1.) Generate as big a dataset of high quality tokens as possible up to likely about 10-15% of the total pretraining token budget
+
+2.) Anneal with a replay fraction of between 50-70% original tokens
+
+3.) Decay shape does not matter that much (cosine is fine)
+
+4.) Use a max lr about 75% of original max lr for the phase 1 pretraining and a linear warmup from 0 to this maxlr over a few thousand steps
 
 
 ## Bonus: Efficient Decoding
