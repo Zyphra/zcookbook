@@ -18,8 +18,6 @@ And the following engineering optimizations
 
 # Introduction: How Zyphra thinks about Hybrid Models
 
-(TODO: Someone can reign me in here if they disagree)
-
 Dense transformer models (i.e. alternating multi-head attention (MHA) and multilayer perceptron (MLP) blocks) have dominated the DL model space for a long time. The reason for this is simple: 
 1. MHA computes exact cross-sequence dependencies, and consists of GEMMs, which are easy to parallelize across many GPU SMs
 2. MLPs mix the heads of MHA and perform per-token processing, and trivially boil down to GEMMs
