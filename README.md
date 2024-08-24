@@ -15,10 +15,7 @@ The following datasets:
 And the following engineering optimizations
 - [Tree Attention](https://www.zyphra.com/post/tree-attention-topology-aware-decoding-for-long-context-attention-on-gpu-clusters)
 
-
 # Introduction: How Zyphra thinks about Hybrid Models
-
-(TODO: Someone can reign me in here if they disagree)
 
 Dense transformer models (i.e. alternating multi-head attention (MHA) and multilayer perceptron (MLP) blocks) have dominated the DL model space for a long time. The reason for this is simple: 
 1. MHA computes exact cross-sequence dependencies, and consists of GEMMs, which are easy to parallelize across many GPU SMs
@@ -31,8 +28,8 @@ Lots of LLM blocks (e.g. MHA, MLPs, RWKV, Mamba, KANs, xLSTM, etc) boil down to 
 Typically, these components are alternated so that the sequence is mixed, the per-token representations are updated, the sequence is mixed again etc. A careful balance of sequence and token mixing is required for good performance. 
 
 Therefore, potential LLM architectures should be evaluated on whether they:
-1. Have lower FLOP and memory requirements. We believe this is most important at [inference-time](TODO: mosaicml paper), but also helps training.
-2. Maintain the benefits of exact cross-sequence modeling from MHA (can be measured by proxy via [long-context reasoning](TODO) and [in-context learning](TODO)), and general language modelling evaluations)
+1. Have lower FLOP and memory requirements. We believe this is most important at [inference-time](https://arxiv.org/pdf/2401.00448v1), but also helps training.
+2. Maintain the benefits of exact cross-sequence modeling from MHA (can be measured by proxy via [long-context reasoning](https://arxiv.org/abs/2406.07887) and [in-context learning](https://arxiv.org/abs/2402.03170), and general language modelling evaluations)
 
 
 The deployment context determines which of these properties is most important, for example:
@@ -51,26 +48,41 @@ This motivates a hybrid architecture which mixes attention and linear sequence m
 We observe that b
 
 
-
-(TODO: Dropdown on cross-sequence dependencies, and what I mean by "exact")
-
 # Model Architectures
 
-## Dense Transformers
+In this section, we delve into the various model architectures that Zyphra has explored and implemented, each designed to address specific challenges and leverage unique advantages in the realm of hybrid models.
 
-(TODO: Dense transformer pic)
+### Dense Transformers
 
-## MoE Architectures
+Dense transformers, characterized by their alternating multi-head attention (MHA) and multilayer perceptron (MLP) blocks, have been a cornerstone in the development of large language models. These architectures excel in computing exact cross-sequence dependencies and are highly parallelizable, making them a popular choice for many applications.
 
-(TODO: transformer MoE and BlackMamba pics)
+![Dense Transformer](transformer.png)
 
-## SSM Architectures
+### MoE Architectures
 
-(TODO: Mamba and RWKV pics)
+Mixture of Experts (MoE) architectures introduce a level of sparsity by routing different tokens or sequences to different subsets of experts. This approach allows for a trade-off between model capacity and computational efficiency, making it particularly appealing for large-scale models deployed on high-VRAM GPUs.
 
-## Hybrid Architectures
+![MoE Transformer](transformer-moe.png)
+![BlackMamba](blackmamba.png)
 
-(TODO: Zamba and Jamba pics)
+### SSM Architectures
+
+State Space Models (SSM) offer a more efficient alternative to traditional attention mechanisms, particularly beneficial for smaller models deployed on devices with strict power and memory constraints. Models like Mamba and RWKV leverage these architectures to achieve competitive performance with significantly lower FLOP and memory requirements.
+
+![Mamba](mamba.png)
+![RWKV](rwkv.png)
+
+### Hybrid Architectures
+
+Hybrid architectures combine the strengths of both dense transformers and SSMs. By integrating elements of full attention with more efficient linear sequence mixers, these models aim to balance performance with computational efficiency. Zyphra's Zamba and Jamba models are prime examples of this approach, demonstrating the potential of hybrid architectures in various applications.
+
+![alt text](image.png)
+
+![Zamba](zamba.png)
+![Jamba](jamba.png)
+
+Each of these architectures is illustrated below to provide a visual understanding of their structure and components. The figures have been optimized to appear well-balanced and readable, ensuring they serve as effective visual aids in understanding the complexities of each model architecture.
+
 
 
 
@@ -90,7 +102,7 @@ During the model planning phase, it's common to calculate what models will fit i
 
 ## Transformer Calculations
 
-For dense and MoE transformers, we recommend using the [EleutherAI cookbook](TODO) by Quentin Anthony, Hailey Schoelkopf, and Stella Biderman.
+For dense and MoE transformers, we recommend using the [EleutherAI cookbook](https://github.com/EleutherAI/cookbook) by Quentin Anthony, Hailey Schoelkopf, and Stella Biderman.
 
 ## Hybrid Calculations
 (TODO: Quentin/Beren/Paolo)
@@ -111,13 +123,12 @@ For dense and MoE transformers, we recommend using the [EleutherAI cookbook](TOD
 (TODO: Quentin/Vasu)
 
 For communication benchmarks, there are two levels of tests: 
-1. Microbrenchmark-level benchmarks in C/CUDA/C++ such as [OSU-Microbenchmarks](TODO) and [NCCL-tests](TODO). These are best for checking hardware, low-level communication software and drivers, and low-level communication optimizations (e.g. [SHARP](), communication algorithm tuning, etc).
+1. Microbrenchmark-level benchmarks in C/CUDA/C++ such as [OSU-Microbenchmarks](https://mvapich.cse.ohio-state.edu/benchmarks/) and [NCCL-tests](https://github.com/NVIDIA/nccl-tests). These are best for checking hardware, low-level communication software and drivers, and low-level communication optimizations (e.g. [SHARP](), communication algorithm tuning, etc).
     - 
     - 
-2. Framework-level benchmarks in PyTorch/Jax such as those in the [EleutherAI cookbook](TODO). These are best to ensure that framework properties (e.g. synchronization, tensor dtype handling, etc) preserve the performance of microbenchmarks, and measure performance effects of framework-level optimizations (e.g. [tensor fusion](TODO), [CUDA graphs](TODO), etc) and communication in the context of applications (e.g. communication/computation overlap)
+2. Framework-level benchmarks in PyTorch/Jax such as those in the [EleutherAI cookbook](https://github.com/EleutherAI/cookbook). These are best to ensure that framework properties (e.g. synchronization, tensor dtype handling, etc) preserve the performance of microbenchmarks, and measure performance effects of framework-level optimizations (e.g. [tensor fusion/bucketing](https://pytorch.org/docs/stable/notes/ddp.html#internal-design), [CUDA graphs](https://pytorch.org/blog/accelerating-pytorch-with-cuda-graphs/), etc) and communication in the context of applications (e.g. communication/computation overlap)
     - 
     - 
-
 
 In this cookbook, we provide framework-level benchmarks in Jax at TODO
 
@@ -126,9 +137,14 @@ In this cookbook, we provide framework-level benchmarks in Jax at TODO
 
 
 ## Annealing
-We additionally find, following [miniCPM](https://arxiv.org/html/2404.06395v1) that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 'High quality' is obviously subjective in part but these typically include fact-rich information such as Wikipedia and arxiv papers, instruction following and chat data as well as synthetic fact-enhanced textbook style data such as [cosmopedia](https://huggingface.co/blog/cosmopedia). We find that upweighting these datasets while also rapidly decaying the learning rate towards the end of training results in performance increases and a superior output quality of the model.
+We additionally find, following [miniCPM](https://arxiv.org/html/2404.06395v1) that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 'High quality' is obviously subjective in part but these typically include fact-rich information such as:
+- Wikipedia and arxiv papers
+- Instruction following and chat data 
+- Synthetic fact-enhanced textbook style data such as [cosmopedia](https://huggingface.co/blog/cosmopedia).
 
-We performed significant ablations to optimize the learning rate schedule. Overall, we observed that 
+We find that upweighting these datasets while also rapidly decaying the learning rate towards the end of training results in performance increases and a superior output quality of the model.
+
+We performed significant ablations to optimize the learning rate schedule. Overall, we observed that TODO
 
 
 ## Bonus: Efficient Decoding
