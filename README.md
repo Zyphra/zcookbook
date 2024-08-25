@@ -7,7 +7,7 @@ For context, we at Zyphra have built the following hybrid models:
 - [BlackMamba](https://arxiv.org/abs/2402.01771)
 - [Zamba-7B](https://www.zyphra.com/post/zamba)
 - [Zamba2-2.7B](https://www.zyphra.com/post/zamba2-small)
-- [Zamba2-1.2B](TODO)
+- [Zamba2-1.2B](https://huggingface.co/Zyphra/Zamba2-1.2B)
 
 The following datasets:
 - [Zyda](https://www.zyphra.com/post/zyda)
@@ -54,8 +54,6 @@ An additional change we made to the architecture, which turned out to be surpris
 
 Beyond this, in later Zamba2 models we also applied LoRAs to the shared layers. This allows us to further specialize the shared blocks which slightly improves performance at a very small parameter cost. Using LoRAs in this way during pretraining is unusual and we believe it is an underexplored avenue for creating extremely parameter-efficient models.
 
-(TODO: Dropdown on cross-sequence dependencies, and what I mean by "exact")
-
 # Model Architectures
 
 Let's talk about model architectures. Why do we think hybrids offer the best model quality per training/inference FLOP?
@@ -93,17 +91,13 @@ Dense hybrid architectures combine the strengths of both dense transformers and 
 <img src="zamba-7b.png" width="1700" alt="zamba-7b">     |  <img src="zamba2-2p7b.png" width="1600" alt="zamba2-2p7b">    |    <img src="zamba2-1p2b.png" width="2000" alt="zamba2-1p2b">
 
 
-# Data
-(TODO: Yury)
-
-For a script on calculating the number of tokens in a TODO-formatted dataset based on a given tokenizer, see [Token Calculation](#token-calculation)
-
 # Calculations
 
-During the model planning phase, it's common to calculate what models will fit into a given budget of parameters, FLOPs, and inference/training memory. In this cookbook we present scripts we use internally to compute the parameters and FLOPs for a given model architecture and sizing. We see this as an extension of the [EleutherAI cookbook](TODO) but specialized to SSMs and hybrid models.
+During the model planning phase, it's common to calculate what models will fit into a given budget of parameters, FLOPs, and inference/training memory. In this cookbook we present scripts we use internally to compute the parameters and FLOPs for a given model architecture and sizing. We see this as an extension of the [EleutherAI cookbook](https://github.com/EleutherAI/cookbook) but specialized to SSMs and hybrid models.
 
 ## SSM Calculations
-(TODO: Quentin/Beren/Paolo)
+
+We create calculation scripts for the parameters and FLOPs of mamba models in https://github.com/Zyphra/cookbook/tree/main/calc
 
 
 ## Transformer Calculations
@@ -115,24 +109,27 @@ For dense and MoE transformers, we recommend using the [EleutherAI cookbook](htt
 
 
 ## Token Calculation
-(TODO: Yury/Quentin)
+
+We provide a script at https://github.com/Zyphra/cookbook/tree/main/calc/data/tokenize_and_count.py that tokenizes text data from a Hugging Face dataset, calculates the total number of tokens, and optionally saves the tokenized dataset.
 
 
 # Benchmarks
 
 
 ## Block Benchmarks and Sizing
-(TODO: Quentin)
+
+We provide computation benchmarks for hybrid model blocks such as attention, Mamba1, and Mamba2 in https://github.com/Zyphra/cookbook/tree/main/benchmarks/computation. These are useful for comparing hardware performance and for [efficiently sizing models](https://arxiv.org/abs/2401.14489).
 
 
 ## Communication
-(TODO: Quentin/Vasu)
+
+We provide communication benchmarks in Jax at https://github.com/Zyphra/cookbook/tree/main/benchmarks/communication
 
 For communication benchmarks, there are two levels of tests: 
 1. Microbrenchmarks in C/CUDA/C++ such as [OSU-Microbenchmarks](https://mvapich.cse.ohio-state.edu/benchmarks/) and [NCCL-tests](https://github.com/NVIDIA/nccl-tests). These are best for checking hardware, low-level communication software and drivers, and low-level communication optimizations (e.g. [SHARP](), communication algorithm tuning, etc).
 2. Framework-level benchmarks in PyTorch/Jax such as those in the [EleutherAI cookbook](https://github.com/EleutherAI/cookbook). These are best to ensure that framework properties (e.g. synchronization, tensor dtype handling, etc) preserve the performance of microbenchmarks, and measure performance effects of framework-level optimizations (e.g. [tensor fusion/bucketing](https://pytorch.org/docs/stable/notes/ddp.html#internal-design), [CUDA graphs](https://pytorch.org/blog/accelerating-pytorch-with-cuda-graphs/), etc) and communication in the context of applications (e.g. communication/computation overlap)
 
-In this cookbook, we provide framework-level benchmarks in Jax at TODO
+In this cookbook, we provide framework-level benchmarks in Jax at https://github.com/Zyphra/cookbook/tree/main/benchmarks/communication
 
 # Training
 

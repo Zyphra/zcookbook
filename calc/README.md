@@ -131,3 +131,56 @@ Where we convert days into seconds since TFLOPs are in seconds. As an example, l
 
 With this number and our estimates of FLOP count for a given model and dataset size we can evaluate what model and dataset sizes are feasible to train given our FLOP budget. This gives us a space of possible models we can train. Within this space, we can use the scaling laws (if they exist) to tell us what the optimal model and dataset size would be to achieve the lowest loss.
 
+
+## Token Calculation
+
+We provide a script at https://github.com/Zyphra/cookbook/tree/main/calc/data/tokenize_and_count.py that tokenizes text data from a Hugging Face dataset, calculates the total number of tokens, and optionally saves the tokenized dataset.
+
+### Requirements
+
+- Python 3.6+
+- transformers
+- datasets
+
+Install the required packages:
+
+```
+pip install transformers datasets
+```
+
+### Usage
+
+Run the script from the command line with the following arguments:
+
+```
+python token_calculation.py --hf-path <dataset_path> --hf-tokenizer <tokenizer_path> [OPTIONS]
+```
+
+
+#### Required Arguments:
+
+- `--hf-path`: Path of the Hugging Face dataset
+- `--hf-tokenizer`: Path of the Hugging Face tokenizer
+
+#### Optional Arguments:
+
+- `--hf-dir`: Directory in the Hugging Face dataset (default: None)
+- `--key`: Name of the column that contains text to tokenize (default: 'text')
+- `--save-path`: Folder to save processed Hugging Face dataset to (default: None)
+- `--num-proc`: Number of processes for Hugging Face processing (default: 1)
+
+### Example
+
+```
+python token_calculation.py --hf-path "dataset/my_dataset" --hf-tokenizer "bert-base-uncased" --key "content" --save-path "./tokenized_dataset" --num-proc 4
+```
+
+
+This command will:
+1. Load the dataset from "dataset/my_dataset"
+2. Use the "bert-base-uncased" tokenizer
+3. Tokenize the "content" column of the dataset
+4. Use 4 processes for parallel processing
+5. Save the tokenized dataset to "./tokenized_dataset"
+
+The script will output the total number of tokens in the dataset and save the tokenized dataset if a save path is provided.
