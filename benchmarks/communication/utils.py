@@ -112,8 +112,8 @@ def benchmark_parser():
     parser.add_argument("--scan", action="store_true", help='Enables scanning all message sizes')
     parser.add_argument("--raw", action="store_true", help='Print the message size and latency without units')
     parser.add_argument("--all-reduce", action="store_true", help='Run all_reduce')
-    parser.add_argument("--all-gather", action="store_true", help='Run all_gather')
-    parser.add_argument("--all-to-all", action="store_true", help='Run all_to_all')
+    #parser.add_argument("--all-gather", action="store_true", help='Run all_gather')
+    #parser.add_argument("--all-to-all", action="store_true", help='Run all_to_all')
     parser.add_argument("--pt2pt", action="store_true", help='Run pt2pt')
     parser.add_argument("--broadcast", action="store_true", help='Run broadcast')
     parser.add_argument("--dtype", type=str, default='float32', 

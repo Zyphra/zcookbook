@@ -49,8 +49,6 @@ options:
   --scan                Enables scanning all message sizes
   --raw                 Print the message size and latency without units
   --all-reduce          Run all_reduce
-  --all-gather          Run all_gather
-  --all-to-all          Run all_to_all
   --broadcast           Run broadcast
   --dtype DTYPE         JAX array dtype
   --mem-factor MEM_FACTOR

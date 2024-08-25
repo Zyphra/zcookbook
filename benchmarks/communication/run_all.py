@@ -18,14 +18,10 @@ def main(args, rank):
     ops_to_run = []
     if args.all_reduce:
         ops_to_run.append('all_reduce')
-    if args.all_gather:
-        ops_to_run.append('all_gather')
     if args.broadcast:
         ops_to_run.append('broadcast')
     if args.pt2pt:
         ops_to_run.append('pt2pt')
-    if args.all_to_all:
-        ops_to_run.append('all_to_all')
 
     if len(ops_to_run) == 0:
         ops_to_run = ['all_reduce', 'broadcast', 'pt2pt']
