@@ -189,13 +189,10 @@ We typically find that a fraction of 50-70% 'replay' tokens from the original pr
 
 Concretely, our reccomendations for annealing are:
 
-1.) Generate as big a dataset of high quality tokens as possible up to likely about 10-15% of the total pretraining token budget
-
-2.) Anneal with a replay fraction of between 50-70% original tokens
-
-3.) Decay shape does not matter that much (cosine is fine)
-
-4.) Use a max lr about 75% of original max lr for the phase 1 pretraining and a linear warmup from 0 to this maxlr over a few thousand steps
+1. Generate or collect as big a dataset of high-quality tokens as possible. We've seen benefits on up to about 10-15% of the total pretraining token budget, beyond which should help but is uncharted territory.
+2. Anneal with a replay fraction of between 50-70% tokens from the pre-training dataset.
+3. The decay shape does not matter that much (cosine is fine).
+4. Use a max LR of about 75% of original max LR that was used in the pre-training phase, and use a linear warmup from 0 to this max annealing LR over a few thousand iterations.
 
 
 ## Bonus: Efficient Decoding
