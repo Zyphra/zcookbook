@@ -31,15 +31,14 @@ Like the individual benchmarks, `run_all.py` supports scanning arguments for the
 Finally, users can choose specific communication operations to run in `run_all.py` by passing them as arguments (all operations are run by default). For example:
 
 <pre>
-python run_all.py --scan --all-reduce --all-to-all --broadcast
+python run_all.py --scan --all-reduce --broadcast
 </pre>
 
 There is a wide range of arguments available:
 
 ```
 usage: run_all.py [-h] [--trials TRIALS] [--warmups WARMUPS] [--maxsize MAXSIZE]
-                  [--bw-unit {Gbps,GBps}] [--scan] [--raw] [--all-reduce] [--all-gather]
-                  [--all-to-all] [--broadcast] [--dtype DTYPE] [--mem-factor MEM_FACTOR] [--debug]
+                  [--bw-unit {Gbps,GBps}] [--scan] [--raw] [--all-reduce] [--broadcast] [--dtype DTYPE] [--mem-factor MEM_FACTOR] [--debug]
 
 options:
   -h, --help            show this help message and exit
