@@ -67,7 +67,7 @@ Dense transformers, are primarily composed of alternating multi-head attention (
 
 ### MoE Architectures
 
-Mixture of Experts (MoE) architectures introduce a router block that splits the input sequence(s) to appropriate MLP experts on a per-token basis. While the MoE has the inference latency of its forward-pass parameters, all parameters need to be loaded into memory.
+Mixture of Experts (MoE) architectures introduce a router block that splits the input sequence(s) to appropriate MLP experts on a per-token basis. While the MoE has the inference latency of its forward-pass parameters, all parameters need to be loaded into VRAM which often means inference can only be performed distributed across GPU clusters for large models.
 
 ### SSM/RNN Architectures
 
@@ -84,7 +84,7 @@ However, the exact cross-sequence dependencies of attention is hard to beat, and
 
 ### Hybrid Architectures
 
-Dense hybrid architectures combine the strengths of both dense transformers and SSMs. They don't introduce the memory overhead of MoEs, maintain the exact cross-sequence dependencies of attention, and have inference latency of SSMs.
+Dense hybrid architectures combine the strengths of both dense transformers and SSMs. They don't introduce the memory overhead of MoEs, maintain the exact cross-sequence dependencies of attention, and have inference latency close to pure SSMs.
 
 **Zamba-7B**    |    **Zamba2-2.7B**       |  **Zamba2-1.2B**
 :-------------------------:|:-------------------------:|:-------------------------:
