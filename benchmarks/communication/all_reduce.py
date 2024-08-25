@@ -12,7 +12,7 @@ from communication.utils import *
 from communication.constants import *
 
 def timed_all_reduce(input, args):
-    @jax.pmap
+    @jax.pmap(axis_name='i')
     def all_reduce(x):
         return jax.lax.pmean(x, axis_name='i')
 
@@ -53,11 +53,11 @@ def run_all_reduce(args):
         # Loop over various tensor sizes
         for M in M_LIST:
             try:
-                mat = jnp.ones((jax.device_count(), M), dtype=getattr(jnp, args.dtype))
-                input = jax.pmap(lambda i, x: x * i)(jnp.arange(jax.device_count()), mat)
+                mat = jnp.ones((jax.local_device_count(), M), dtype=getattr(jnp, args.dtype))
+                input = jax.pmap(lambda x: x)(mat)  # Distribute the data across devices
             except RuntimeError as e:
                 if 'out of memory' in str(e):
-                    print('WARNING: Ran out of GPU memory. Exiting comm op.')
+                    print_rank_0('WARNING: Ran out of GPU memory. Exiting comm op.')
                     break
                 else:
                     raise e
@@ -69,11 +69,11 @@ def run_all_reduce(args):
                                      mem_factor=args.mem_factor * 2,
                                      args=args)
         try:
-            mat = jnp.ones((jax.device_count(), elements_per_gpu), dtype=getattr(jnp, args.dtype))
-            input = jax.pmap(lambda i, x: x * i)(jnp.arange(jax.device_count()), mat)
+            mat = jnp.ones((jax.local_device_count(), elements_per_gpu), dtype=getattr(jnp, args.dtype))
+            input = jax.pmap(lambda x: x)(mat)  # Distribute the data across devices
         except RuntimeError as e:
             if 'out of memory' in str(e):
-                print('WARNING: Ran out of GPU memory. Try to reduce the --mem-factor argument!')
+                print_rank_0('WARNING: Ran out of GPU memory. Try to reduce the --mem-factor argument!')
                 return
             else:
                 raise e
