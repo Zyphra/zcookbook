@@ -12,20 +12,20 @@ from communication.utils import *
 from communication.constants import *
 
 def timed_all_reduce(input, args):
-    @partial(jax.pmap, axis_name='i')
+    @jax.pmap
     def all_reduce(x):
         return jax.lax.pmean(x, axis_name='i')
 
     # Warmups
     for _ in range(args.warmups):
-        all_reduce(input)
-    jax.local_devices()[0].synchronize_all_activity()
+        result = all_reduce(input)
+        result.block_until_ready()  # Ensure the computation is complete
 
     # Time the actual comm op
     start_time = time.time()
     for _ in range(args.trials):
-        all_reduce(input)
-    jax.local_devices()[0].synchronize_all_activity()
+        result = all_reduce(input)
+        result.block_until_ready()  # Ensure the computation is complete
     end_time = time.time()
     
     duration = (end_time - start_time)
@@ -67,7 +67,6 @@ def run_all_reduce(args):
         elements_per_gpu = max_numel(comm_op='all_reduce',
                                      dtype=getattr(jnp, args.dtype),
                                      mem_factor=args.mem_factor * 2,
-                                     local_rank=0,
                                      args=args)
         try:
             mat = jnp.ones((jax.device_count(), elements_per_gpu), dtype=getattr(jnp, args.dtype))

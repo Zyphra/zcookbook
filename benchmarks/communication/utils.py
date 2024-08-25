@@ -71,7 +71,9 @@ def get_metric_strings(args, tput, busbw, duration):
     return tput, busbw, duration
 
 def sync_all():
-    jax.local_devices()[0].synchronize_all_activity()
+    # In JAX, explicit synchronization is often not necessary
+    # due to its functional nature, but we can use a barrier if needed
+    jax.pmap(lambda x: x)(jnp.zeros(jax.local_device_count())).block_until_ready()
 
 def max_numel(comm_op, dtype, mem_factor, args):
     dtype_size = jnp.dtype(dtype).itemsize
@@ -112,7 +114,9 @@ def benchmark_parser():
     parser.add_argument("--all-to-all", action="store_true", help='Run all_to_all')
     parser.add_argument("--pt2pt", action="store_true", help='Run pt2pt')
     parser.add_argument("--broadcast", action="store_true", help='Run broadcast')
-    parser.add_argument("--dtype", type=str, default=DEFAULT_TYPE, help='JAX array dtype')
+    parser.add_argument("--dtype", type=str, default='float32', 
+                        choices=['float32', 'float64', 'int32', 'int64', 'float16', 'bfloat16'],
+                        help='JAX array dtype')
     parser.add_argument("--mem-factor",
                         type=float,
                         default=.3,
