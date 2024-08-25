@@ -1,5 +1,9 @@
-import torch
-import sys, os, time
+import jax
+import jax.numpy as jnp
+import sys
+import os
+import time
+from functools import partial
 
 COMMS_BENCH_DIR = os.path.join(os.path.dirname(__file__), "../")
 sys.path.append(COMMS_BENCH_DIR)
@@ -7,108 +11,75 @@ sys.path.append(COMMS_BENCH_DIR)
 from communication.utils import *
 from communication.constants import *
 
+def timed_all_reduce(input, args):
+    @partial(jax.pmap, axis_name='i')
+    def all_reduce(x):
+        return jax.lax.pmean(x, axis_name='i')
 
-def timed_all_reduce(input, start_event, end_event, args):
-    if args.dist == 'torch':
-        import torch.distributed as dist
-    elif args.dist == 'deepspeed':
-        import deepspeed.comm as dist
+    # Warmups
+    for _ in range(args.warmups):
+        all_reduce(input)
+    jax.local_devices()[0].synchronize_all_activity()
 
-    sync_all()
-    # Warmups, establish connections, etc.
-    for i in range(args.warmups):
-        dist.all_reduce(input, async_op=args.async_op)
-    sync_all()
+    # Time the actual comm op
+    start_time = time.time()
+    for _ in range(args.trials):
+        all_reduce(input)
+    jax.local_devices()[0].synchronize_all_activity()
+    end_time = time.time()
+    
+    duration = (end_time - start_time)
 
-    # time the actual comm op trials times and average it
-    start_event.record()
-    for i in range(args.trials):
-        dist.all_reduce(input, async_op=args.async_op)
-    end_event.record()
-    sync_all()
-    duration = start_event.elapsed_time(end_event) / 1000
-
-    # maintain and clean performance data
+    # Maintain and clean performance data
     avg_duration = duration / args.trials
-    size = input.element_size() * input.nelement()
-    n = dist.get_world_size()
+    size = input.nbytes
+    n = jax.device_count()
     tput, busbw = get_bw('all_reduce', size, avg_duration, args)
     tput_str, busbw_str, duration_str = get_metric_strings(args, tput, busbw, avg_duration)
-    desc = f'{input.nelement()}x{input.element_size()}'
+    desc = f'{input.size}x{input.dtype.itemsize}'
 
     if not args.raw:
         size = convert_size(size)
 
     print_rank_0(f"{size:<20} {desc:25s} {duration_str:20s} {tput_str:20s} {busbw_str:20s}")
 
-
-def run_all_reduce(local_rank, args):
-    if args.dist == 'torch':
-        import torch.distributed as dist
-    elif args.dist == 'deepspeed':
-        import deepspeed.comm as dist
-
+def run_all_reduce(args):
     # Prepare benchmark header
     print_header(args, 'all_reduce')
 
-    world_size = dist.get_world_size()
-    global_rank = dist.get_rank()
-
-    start_event = torch.cuda.Event(enable_timing=True)
-    end_event = torch.cuda.Event(enable_timing=True)
-
     if args.scan:
-        M_LIST = []
-        for x in (2**p for p in range(1, args.maxsize)):
-            M_LIST.append(x)
+        M_LIST = [2**p for p in range(1, args.maxsize)]
 
-        sync_all()
-        # loop over various tensor sizes
+        # Loop over various tensor sizes
         for M in M_LIST:
-            global_rank = dist.get_rank()
             try:
-                mat = torch.ones(world_size, M,
-                                 dtype=getattr(torch, args.dtype)).cuda(local_rank)
-                sync_all()
-                input = ((mat.mul_(float(global_rank))).view(-1))
-                del mat
-                torch.cuda.empty_cache()
+                mat = jnp.ones((jax.device_count(), M), dtype=getattr(jnp, args.dtype))
+                input = jax.pmap(lambda i, x: x * i)(jnp.arange(jax.device_count()), mat)
             except RuntimeError as e:
                 if 'out of memory' in str(e):
-                    if dist.get_rank() == 0:
-                        print('WARNING: Ran out of GPU memory. Exiting comm op.')
-                    sync_all()
+                    print('WARNING: Ran out of GPU memory. Exiting comm op.')
                     break
                 else:
                     raise e
-            sync_all()
-            timed_all_reduce(input, start_event, end_event, args)
+            timed_all_reduce(input, args)
     else:
-        # Send the biggest message size our GPUs can fit. If you're facing OOM errors, reduce the mem_factor
-        # Don't need output tensor, so we double mem_factor
+        # Send the biggest message size our GPUs can fit
         elements_per_gpu = max_numel(comm_op='all_reduce',
-                                     dtype=getattr(torch, args.dtype),
+                                     dtype=getattr(jnp, args.dtype),
                                      mem_factor=args.mem_factor * 2,
-                                     local_rank=local_rank,
+                                     local_rank=0,
                                      args=args)
         try:
-            mat = torch.ones(elements_per_gpu, dtype=getattr(torch,
-                                                             args.dtype)).cuda(local_rank)
-            input = ((mat.mul_(float(global_rank))).view(-1))
+            mat = jnp.ones((jax.device_count(), elements_per_gpu), dtype=getattr(jnp, args.dtype))
+            input = jax.pmap(lambda i, x: x * i)(jnp.arange(jax.device_count()), mat)
         except RuntimeError as e:
             if 'out of memory' in str(e):
-                if dist.get_rank() == 0:
-                    print('WARNING: Ran out of GPU memory. Try to reduce the --mem-factor argument!')
-                sync_all()
+                print('WARNING: Ran out of GPU memory. Try to reduce the --mem-factor argument!')
                 return
             else:
                 raise e
-        sync_all()
-        timed_all_reduce(input, start_event, end_event, args)
-
+        timed_all_reduce(input, args)
 
 if __name__ == "__main__":
     args = benchmark_parser().parse_args()
-    rank = args.local_rank
-    init_processes(local_rank=rank, args=args)
-    run_all_reduce(local_rank=rank, args=args)
+    run_all_reduce(args)
