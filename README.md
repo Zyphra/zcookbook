@@ -186,7 +186,3 @@ Concretely, our reccomendations for annealing are:
 2. Anneal with a replay fraction of between 50-70% tokens from the pre-training dataset.
 3. The decay shape does not matter that much (cosine is fine).
 4. Use a max LR of about 75% of original max LR that was used in the pre-training phase, and use a linear warmup from 0 to this max annealing LR over a few thousand iterations.
-
-
-## Bonus: Efficient Decoding
-(TODO: Vasu/Jon)
