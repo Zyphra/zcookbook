@@ -15,16 +15,17 @@ def timed_broadcast(input, args):
     def broadcast(x):
         return jax.lax.broadcast(x[0], (jax.device_count(),))
 
+
     # Warmups
     for _ in range(args.warmups):
-        broadcast(input)
-    jax.local_devices()[0].synchronize_all_activity()
+        result = broadcast(input)
+        result.block_until_ready()
 
     # Time the actual comm op
     start_time = time.time()
     for _ in range(args.trials):
-        broadcast(input)
-    jax.local_devices()[0].synchronize_all_activity()
+        result = broadcast(input)
+        result.block_until_ready()
     end_time = time.time()
 
     duration = end_time - start_time

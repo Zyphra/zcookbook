@@ -5,8 +5,6 @@ sys.path.append(COMMS_BENCH_DIR)
 
 from communication.utils import *
 from communication.all_reduce import run_all_reduce
-from communication.all_gather import run_all_gather
-from communication.all_to_all import run_all_to_all
 from communication.pt2pt import run_pt2pt
 from communication.broadcast import run_broadcast
 from communication.constants import *
@@ -30,15 +28,11 @@ def main(args, rank):
         ops_to_run.append('all_to_all')
 
     if len(ops_to_run) == 0:
-        ops_to_run = ['all_reduce', 'all_gather', 'all_to_all', 'broadcast', 'pt2pt']
+        ops_to_run = ['all_reduce', 'broadcast', 'pt2pt']
 
     for comm_op in ops_to_run:
         if comm_op == 'all_reduce':
             run_all_reduce(local_rank=rank, args=args)
-        if comm_op == 'all_gather':
-            run_all_gather(local_rank=rank, args=args)
-        if comm_op == 'all_to_all':
-            run_all_to_all(local_rank=rank, args=args)
         if comm_op == 'pt2pt':
             run_pt2pt(local_rank=rank, args=args)
         if comm_op == 'broadcast':
