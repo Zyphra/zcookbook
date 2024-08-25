@@ -78,7 +78,7 @@ However, the exact cross-sequence dependencies of attention is hard to beat, and
 
 **Transformer**             |  **Mamba**   |  **Transformer-MoE**  |  **Mamba-MoE**
 :-------------------------:|:-------------------------:|:-------------------------:|:-------------------------:
-<img src="transformer.png" width="1600" alt="transformer">  |  <img src="mamba.png" width="1900" alt="mamba">    |  <img src="transformer-moe.png" width="1900" alt="transformer-moe">     |  <img src="mamba-moe.png" width="2100" alt="mamba-moe">
+<img src="imgs/transformer.png" width="1600" alt="transformer">  |  <img src="imgs/mamba.png" width="1900" alt="mamba">    |  <img src="imgs/transformer-moe.png" width="1900" alt="transformer-moe">     |  <img src="imgs/mamba-moe.png" width="2100" alt="mamba-moe">
 
 
 
@@ -88,7 +88,7 @@ Dense hybrid architectures combine the strengths of both dense transformers and 
 
 **Zamba-7B**    |    **Zamba2-2.7B**       |  **Zamba2-1.2B**
 :-------------------------:|:-------------------------:|:-------------------------:
-<img src="zamba-7b.png" width="1700" alt="zamba-7b">     |  <img src="zamba2-2p7b.png" width="1600" alt="zamba2-2p7b">    |    <img src="zamba2-1p2b.png" width="2000" alt="zamba2-1p2b">
+<img src="imgs/zamba-7b.png" width="1700" alt="zamba-7b">     |  <img src="imgs/zamba2-2p7b.png" width="1600" alt="zamba2-2p7b">    |    <img src="imgs/zamba2-1p2b.png" width="2000" alt="zamba2-1p2b">
 
 
 # Calculations
@@ -139,7 +139,7 @@ We perform all our training using PyTorch within our custom internal fork of [Me
 
 ### What is Annealing?
 
-![Annealing example](annealing-example.png)
+![Annealing example](imgs/annealing-example.png)
 
 We find, following [miniCPM](https://arxiv.org/html/2404.06395v1), that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 
 
