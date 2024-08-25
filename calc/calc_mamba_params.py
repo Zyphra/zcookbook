@@ -67,8 +67,6 @@ def config_parser():
     parser.add_argument("--mamba_moe_layers", type = str, default = "")
     parser.add_argument("--use-global-mem", type=bool, default = False)
     parser.add_argument("--global-memory-projection-interval", type=int, default = 2)
-    parser.add_argument("--gateconv-expansion-factor", type = int, default = 2)
-    parser.add_argument("--gateconv-model", type = bool, default = False)
     
     return parser
 
