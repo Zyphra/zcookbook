@@ -1,145 +1,91 @@
-# Install the newest triton version with
-# pip install "git+https://github.com/openai/triton.git#egg=triton&subdirectory=python"
-import pickle
-import math
+import argparse
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import math
+from mamba_ssm import Mamba2
+from utils import time_fwd_bwd
 
-import numpy as np
-import matplotlib.pyplot as plt
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Benchmark Mamba2')
+    parser.add_argument('--dtype', type=str, default='fp16', choices=['fp16', 'fp32', 'bf16'], help='Data type for torch operations')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose output')
+    parser.add_argument('--seqlen', type=int, default=64, help='Sequence length')
+    parser.add_argument('--batch_size', type=int, default=2, help='Batch size')
+    parser.add_argument('--d_conv', type=int, default=4, help='Dimension of convolution kernel')
+    parser.add_argument('--d_model', type=int, default=1024, help='Model dimension')
+    parser.add_argument('--d_state', type=int, default=64, help='State dimension')
+    parser.add_argument('--expand', type=int, default=2, help='Expansion factor')
+    parser.add_argument('--headdim', type=int, default=128, help='Head dimension')
+    parser.add_argument('--ngroups', type=int, default=1, help='Number of mamba2 groups')
+    parser.add_argument('--repeats', type=int, default=30, help='Number of repeats for benchmarking')
+    parser.add_argument('--device', type=str, default='cuda', help='Torch device to run the benchmark on')
+    return parser.parse_args()
 
-from mamba_ssm import Mamba2, Mamba
+def flops_mamba2(hidden_size, expansion_factor, headdim, ngroups, d_state, sequence_length, batch_size, conv_dimension, num_layers, dt_rank="auto", mode="fwd"):
+    assert mode in ["fwd", "bwd", "fwd_bwd"]
+    iter_factor = 1 if mode == "fwd" else (2 if mode == "bwd" else 3)
+    d_inner = hidden_size * expansion_factor
+    Nheads = d_inner // headdim
+    mamba2_block_flops = 2 * (2 * d_inner + 2 * ngroups  * d_state + Nheads) * hidden_size * batch_size * sequence_length # in proj
+    mamba2_block_flops += 2 * batch_size * sequence_length * (d_inner + 2 * ngroups * d_state) * conv_dimension * d_inner# conv
+    mamba2_block_flops += 2 * batch_size * sequence_length * d_inner * d_state * d_inner # dtbx
+    mamba2_block_flops += 2 * batch_size * sequence_length * d_inner * d_state # ssm state rollover
+    mamba2_block_flops += 2 * batch_size * sequence_length * d_inner * d_state * hidden_size # c-> y
+    mamba2_block_flops += batch_size * sequence_length * hidden_size # z gate output
+    return mamba2_block_flops
 
-from utils_zbm import time_fwd_bwd, ns_per_param
+def pretty_print_latency(latency_ms):
+    if latency_ms < 1:
+        return f"{latency_ms*1000:.2f} µs"
+    elif latency_ms < 1000:
+        return f"{latency_ms:.2f} ms"
+    else:
+        return f"{latency_ms/1000:.2f} s"
 
-# # To Print out location of library pointers
-# import inspect
-# print( inspect.getmodule(Mamba) )
-# print( inspect.getmodule(Mamba2) )
+def efficiency(flop, time):
+    return (flop / time / 10**12) if not math.isnan(time) else 0.0
 
-# def flops(batch, seqlen, headdim, nheads, causal, mode="fwd"):
-#     assert mode in ["fwd", "bwd", "fwd_bwd"]
-#     f = 4 * batch * seqlen**2 * nheads * headdim // (2 if causal else 1)
-#     return f if mode == "fwd" else (2.5 * f if mode == "bwd" else 3.5 * f)
+def main():
+    args = parse_arguments()
 
-# def flops_mamba(batch, seqlen, d_model, d_state, expand, mode="fwd"):
-#     """
-#     Not certain this calculation is entirely correct for Mamba.
-#     Ref: albertfgu comment in https://github.com/state-spaces/mamba/issues/110
-    
-#     Probably it's different for Mamba2 too.
-#     """
-#     assert mode in ["fwd", "bwd", "fwd_bwd"]
-#     f = 9 * d_state * d_model * seqlen * batch
-#     return f if mode == "fwd" else (2 * f if mode == "bwd" else 3 * f)
+    dtype_map = {'fp16': torch.float16, 'fp32': torch.float32, 'bf16': torch.bfloat16}
+    dtype = dtype_map[args.dtype]
 
-
-# def efficiency(flop, time):
-#     return (flop / time / 10**12) if not math.isnan(time) else 0.0
-
-torch_profiler_flag = False
-
-repeats = 30
-device = 'cuda'
-dtype = torch.float16 # torch.float16 or torch.bfloat16
-#print(f"dtype = {dtype}")
-
-bs_seqlen_vals = [(2, 64)]
-d_model_vals = [1024, 2048, 4096, 8192, 16384] # [1024 is the min that seems to work]
-d_state_vals = [64, 128, 256]
-expand_vals = [2]
-headdim_vals = [128] #[128, 64, 32, 16]
-
-
-# # THESE PARAMs WORK IN MAMBA2! - see mamba2_benchmark_test_cw.py
-# batch, length, dim = 2, 64, 1024
-# x = torch.randn(batch, length, dim).to("cuda")
-# model = Mamba2(
-#     # This module uses roughly 3 * expand * d_model^2 parameters
-#     d_model=dim, # Model dimension d_model
-#     d_state=64,  # SSM state expansion factor, typically 64 or 128
-#     d_conv=4,    # Local convolution width
-#     expand=2,    # Block expansion factor
-#     headdim=128
-# ).to("cuda")
+    batch_size = args.batch_size
+    seqlen = args.seqlen
+    d_model = args.d_model
+    d_state = args.d_state
+    expand = args.expand
+    headdim = args.headdim
+    ngroups = args.ngroups
+    d_conv = args.d_conv
 
 
-methods = (["Flash2-Mamba2"])
+    input = torch.randn(batch_size, seqlen, d_model, device=args.device, dtype=dtype, requires_grad=True)
+    model = Mamba2(d_model=d_model, d_state=d_state, expand=expand, headdim=headdim, device=args.device, dtype=dtype)
 
-time_f = {}
-time_b = {}
-time_f_b = {}
-speed_f = {}
-speed_b = {}
-speed_f_b = {}
+    num_params = sum(p.numel() for p in model.parameters())
 
-if torch_profiler_flag:
-    schedule = torch.profiler.schedule(
-        wait=1,
-        warmup=1,
-        active=2
-    )
-    prof = torch.profiler.profile(
-        schedule=schedule,
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(
-            './'
-        ),
-        record_shapes=True,
-        profile_memory=True,
-        with_flops=True,
-        with_modules=True,
-        with_stack=True,
-    )
-    prof.start()
+    # Warmup
+    for _ in range(10):
+        output = model(input)
+        output.sum().backward()
 
-for batch, seqlen in bs_seqlen_vals:
-    for d_model in d_model_vals:
-        for d_state in d_state_vals:
-            for expand in expand_vals:
-                for headdim in headdim_vals:
-
-                    config = (batch, d_model, d_state, expand, headdim)
-
-                    # Run Mamba2 through Flash 2
-                    input = torch.randn(batch, seqlen, d_model, device=device, dtype=dtype, requires_grad=True)
-                    model = Mamba2(d_model=d_model, d_state=d_state, expand=expand, headdim=headdim, device=device, dtype=dtype)
-
-                    num_params = int(0)
-                    for parameter in model.parameters():
-                        num_params += np.prod(parameter.shape)
-
-                    f, b = time_fwd_bwd(model, input, repeats=repeats, verbose=False)
-                    time_f[config, "Flash2-Mamba2"] = f
-                    time_b[config, "Flash2-Mamba2"] = b
+    # Benchmark
+    f, b = time_fwd_bwd(model, input, repeats=args.repeats, verbose=args.verbose)
 
 
-                    #import IPython; IPython.embed()
-
-                    if torch_profiler_flag:
-                        prof.step()
-
-
-                    print(f"\n### dtype = {dtype}, d_model={d_model}, d_state={d_state}, headdim={headdim}, expand={expand}, batch_size={batch}, seqlen={seqlen}###")
-                    for method in methods:
-                        time_f_b[config, method] = time_f[config, method] + time_b[config, method]
-                        speed_f[config, method] = ns_per_param(time_f[config, method], num_params)
-                        speed_b[config, method] = ns_per_param(time_b[config, method], num_params)
-                        speed_f_b[config, method] = ns_per_param(time_f_b[config, method], num_params)
-                        
-                        print(
-                            f"{method} fwd: {speed_f[config, method]:.5f} ns/param, "
-                            f"bwd: {speed_b[config, method]:.5f} ns/param, "
-                            f"fwd + bwd: {speed_f_b[config, method]:.5f} ns/param"
-                        )
+    fwd_flops = flops_mamba2(d_model, expand, headdim, ngroups, d_state, seqlen, batch_size, d_conv, 1, mode="fwd")
+    bwd_flops = flops_mamba2(d_model, expand, headdim, ngroups, d_state, seqlen, batch_size, d_conv, 1, mode="bwd")
+    fwd_bwd_flops = flops_mamba2(d_model, expand, headdim, ngroups, d_state, seqlen, batch_size, d_conv, 1, mode="fwd_bwd")
 
 
-if torch_profiler_flag:
-    prof.stop()
+    print(f"### d_model={d_model}, d_state={d_state}, expand={expand}, batch_size={batch_size}, seqlen={seqlen} ###")
+    print(f"Mamba2 FWD Latency: {pretty_print_latency(f)}")
+    print(f"Mamba2 BWD Latency: {pretty_print_latency(b)}")
+    print(f"Mamba2 FWD+BWD Latency: {pretty_print_latency(f + b)}")
+    print(f"Mamba2 FWD Throughput: {efficiency(fwd_flops, f):.2f} TFLOPs/s")
+    print(f"Mamba2 BWD Throughput: {efficiency(bwd_flops, b):.2f} TFLOPs/s")
+    print(f"Mamba2 FWD+BWD Throughput: {efficiency(fwd_bwd_flops, f + b):.2f} TFLOPs/s")
 
-
-import IPython; IPython.embed()
-
-
-# with open('flash2_attn_time.plk', 'wb') as fp:
-#     pickle.dump((speed_f, speed_b, speed_f_b), fp, protocol=pickle.HIGHEST_PROTOCOL)
+if __name__ == "__main__":
+    main()
