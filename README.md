@@ -140,19 +140,52 @@ In this cookbook, we provide framework-level benchmarks in Jax at TODO
 
 # Training
 
-We perform all our training using PyTorch and our custom internal fork of [MegatronLM](https://arxiv.org/abs/1909.08053). For smaller models we only need to utilize data-parallelism (DP) combined with Zero-1 to shard optimizer states. For larger models such as Zamba-7B, we utilized tensor-parallelism (TP) for which we created our own TP implementation in both Mamba and Mamba2. We also utilized expert-parallelism (EP) for training BlackMamba. 
+We perform all our training using PyTorch within our custom internal fork of [MegatronLM](https://arxiv.org/abs/1909.08053). For smaller models we only need to utilize [Zero-1](https://arxiv.org/abs/1910.02054) to shard optimizer states. For larger models such as Zamba-7B, we utilized [tensor-parallelism (TP)](https://arxiv.org/abs/1909.08053) for which we created our own custom implementation in both Mamba and Mamba2. We also utilized [expert-parallelism (EP)](https://arxiv.org/abs/2305.13048) for training [BlackMamba](https://arxiv.org/abs/2402.01771). 
 
 ## Annealing
-We additionally find, following [miniCPM](https://arxiv.org/html/2404.06395v1) that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 'High quality' is obviously subjective in part but these typically include fact-rich information such as:
+
+### What is Annealing?
+
+![Annealing example](annealing-example.png)
+
+We find, following [miniCPM](https://arxiv.org/html/2404.06395v1), that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 
+
+'High quality' is obviously subjective in part but we find that documents containing fact-rich information to be the most performant. Examples include:
 - Wikipedia and arxiv papers
 - Instruction following and chat data 
 - Synthetic fact-enhanced textbook style data such as [cosmopedia](https://huggingface.co/blog/cosmopedia).
 
-We performed significant ablations to optimize the learning rate schedule. Overall, we observed that the precise form of the LR decay (whether linear, cosine, or exponential) has relatively little effect on the outcome. We observed that the primary determinant of performance was the initial maximum learning rate of the annealing phase. Unlike miniCPM, we found that re-warming up the learning rate to a large percentage (approximately 75%) of the original learning rate for the run over a few thousand steps and then decaying outperformed starting at the original final learning rate for the run. After many ablations, we believe this is due to the fact that rewarming causes a significantly faster decay at the beginning of the annealing phase since the decay occurs over a much greater range in the same number of tokens.
+In terms of the amount of annealing data, we find in general that more is better, although we are generally constrained by amount of available annealing data so that we have not been able to test truly large (>200B tokens) amounts of such data. This fits with the miniCPM findings of setting annealing to be about 10% of the total tokens of a run. We find that multiple epochs of annealing data do not appear to harm performance, yet beyond 2 epochs give little performance improvement. 
 
-When doing annealing we find it is important to maintain a high 'replay fraction' of tokens from the original dataset to stabilize training and maintain performance. We typically find that a replay fraction of 50-70% tokens from the original dataset and 50-30% tokens from the annealing datasets is optimal. Within this range there we find that the sensitivity to the exact replay fraction is quite low.
+<details>
+<summary>Annealing and LR Schedule Models/Papers</summary>
+<br>
 
-In terms of the amount of annealing data, we find in general that more is better, although we are generally constrained by amount of available annealing data so that we have not been able to test truly large (>200B tokens) amounts of such data. This fits with the miniCPM findings of setting annealing to be about 10% of the total tokens of a run. We find that multipoe epochs of annealing data do not appear to harm performance but beyond 2 epochs give little performance improvement. 
+Model Tech Reports Using Annealing
+- [Danube3](https://arxiv.org/abs/2407.09276)
+- [miniCPM](https://arxiv.org/html/2404.06395v1)
+
+Papers on Annealing/LR
+- https://arxiv.org/abs/2406.03476
+- https://arxiv.org/abs/2403.08763
+- https://arxiv.org/abs/2405.16712v1
+
+</details>
+
+### Annealing LR Schedule
+
+We performed significant ablations to explore the LR schedule. We made the following observations: 
+- **The precise form of the LR decay (whether linear, cosine, or exponential) has relatively little effect on the final eval performance.** 
+- The primary determinant of performance was the initial maximum LR of the annealing phase. 
+- Unlike miniCPM, we found that re-warming up the LR to a large percentage (approximately 75%) of the original LR used in the pre-training phase and then decaying to zero outperformed starting at the final LR of the pre-training phase. After many ablations, we believe this is due to the fact that rewarming causes a significantly faster decay at the beginning of the annealing phase since the decay occurs over a much greater range in the same number of tokens.
+
+### What is replay? How much do you need?
+
+When doing annealing we find it is important to maintain a high 'replay fraction' of tokens from the original pre-training dataset to stabilize training and maintain performance. This is done both to extend the annealing phase so that the model has more optimizer steps to digest the annealing data, and to minimize forgetting of the original pre-training data distribution.
+
+We typically find that a fraction of 50-70% 'replay' tokens from the original pre-training dataset and 50-30% tokens from the annealing datasets is optimal. Within this range there we find that the sensitivity to the exact replay fraction is quite low, yet we hold the intuition that replay should scale with the magnitude of the distribution shift between the pre-training and annealing datasets.
+
+### Annealing Summary
 
 Concretely, our reccomendations for annealing are:
 
