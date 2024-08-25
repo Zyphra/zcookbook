@@ -12,19 +12,20 @@ from communication.utils import *
 from communication.constants import *
 
 def timed_all_reduce(input, args):
-    @jax.pmap(axis_name='i')
     def all_reduce(x):
         return jax.lax.pmean(x, axis_name='i')
 
+    pmap_all_reduce = jax.pmap(all_reduce, axis_name='i')
+
     # Warmups
     for _ in range(args.warmups):
-        result = all_reduce(input)
+        result = pmap_all_reduce(input)
         result.block_until_ready()  # Ensure the computation is complete
 
     # Time the actual comm op
     start_time = time.time()
     for _ in range(args.trials):
-        result = all_reduce(input)
+        result = pmap_all_reduce(input)
         result.block_until_ready()  # Ensure the computation is complete
     end_time = time.time()
     
@@ -32,11 +33,11 @@ def timed_all_reduce(input, args):
 
     # Maintain and clean performance data
     avg_duration = duration / args.trials
-    size = input.nbytes
+    size = input.size * input.dtype.itemsize
     n = jax.device_count()
     tput, busbw = get_bw('all_reduce', size, avg_duration, args)
     tput_str, busbw_str, duration_str = get_metric_strings(args, tput, busbw, avg_duration)
-    desc = f'{input.size}x{input.dtype.itemsize}'
+    desc = f'{input.shape[1]}x{input.dtype.itemsize}'
 
     if not args.raw:
         size = convert_size(size)
