@@ -29,6 +29,14 @@ def config_parser():
                         type=int,
                         default=4,
                         help='conv1d kernel size')
+    parser.add_argument("--mamba-ngroups", "-dc",
+                        type=int,
+                        default=1,
+                        help='Number of Mamba groups')
+    parser.add_argument("--mamba-headdim", "-dc",
+                        type=int,
+                        default=64,
+                        help='Mamba2 head dimension')
     parser.add_argument("--expand", "-ex",
                         type=int,
                         default=2,
@@ -86,6 +94,18 @@ def compute_mamba_block_params(args):
     mamba_block_params += (args.d_model * d_inner)             # W_y
     mamba_block_params += 2 * args.d_model                     # LayerNorm
     return mamba_block_params, dt_rank
+    
+def compute_mamba2_block_params(args):
+    d_inner = args.d_model * args.expand
+    n_heads = d_inner / args.mamba_headdim
+    d_in_proj = (2 * d_inner) + (2 * args.mamba_ngroups * args.d_state) + n_heads
+    mamba2_block_params = args.d_model * d_in_proj # W_in
+    mamba2_block_params += 3 * n_heads # A, dt, D
+    mamba2_block_params += (d_inner + (2 * args.mamba_ngroups * args.d_state)) * args.d_conv # conv weight
+    mamba2_block_params += d_inner + (2 * args.mamba_ngroups * args.d_state) # conv bias
+    mamba2_block_params += d_inner # layernorm
+    mamba2_block_params += d_inner * args.d_model # W_out
+    return mamba2_block_params
 
 # calculates the params of a model given their hparams
 def calc_params(args):
@@ -96,7 +116,7 @@ def calc_params(args):
     attention_block_params =  4 * args.d_model * args.d_model
     
     mamba_block_params, dt_rank = compute_mamba_block_params(args)
-    gateconv_block_params = compute_gateconv_block_params(args)
+    mamba2_block_params = compute_mamba2_block_params(args)
     
 
     
@@ -144,6 +164,10 @@ def calc_params(args):
                 total_params += mamba_block_params
                 forward_pass_params += mamba_block_params
                 total_mamba_params += mamba_block_params
+            elif el == 'm':
+                total_params += mamba2_block_params
+                forward_pass_params += mamba2_block_params
+                total_mamba_params += mamba2_block_params
             elif el == 'a':
                 total_params += attention_block_params
                 forward_pass_params += attention_block_params
