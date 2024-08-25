@@ -45,6 +45,15 @@ def config_parser():
                         type=str,
                         default="auto",
                         help='Rank of dt')    
+                            help='conv1d kernel size')
+    parser.add_argument("--mamba-ngroups", "-dc",
+                        type=int,
+                        default=1,
+                        help='Number of Mamba groups')
+    parser.add_argument("--mamba-headdim", "-dc",
+                        type=int,
+                        default=64,
+                        help='Mamba2 head dimension')
     parser.add_argument("--num-moe-layers", "-l",
                         type=int,
                         default=0,
@@ -74,6 +83,26 @@ def config_parser():
                         dest='checkpoint_activations')
     return parser
 
+def compute_mamba2_flops(args):
+    d_inner = args.hidden_size * args.expand
+    Nheads = d_inner // args.mamba_headdim
+    mamba2_block_flops = 2 * (2 * d_inner + 2 * args.mamba_ngroups  * args.state_size + Nheads) * args.hidden_size * args.batch_size * args.sequence_length # in proj
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.conv_dimension * args.d_inner# conv
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * args.d_inner # dtbx
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size # ssm state rollover
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * args.d_model # c-> y 
+    mamba2_block_flops += args.batch_size * args.sequence_length * args.hidden_size # z gate output
+    return mamba2_block_flops
+
+def compute_mamba_flops(args):
+    d_inner = args.hidden_size * args.expansion_factor
+    dt_rank = math.ceil(args.hidden_size / 16) if args.dt_rank == "auto" else args.dt_rank
+    ssm_flops = iter_factor * d_inner * args.tokens * (11 * args.state_size + 4 * dt_rank + 1) * args.num_mamba_layers
+    mamba_projectors_flops = iter_factor * args.tokens * 6 * d_inner * args.hidden_size * args.num_mamba_layers
+    mamba_conv_flops = iter_factor * args.tokens * 2 * d_inner * args.conv_dimension * args.num_mamba_layers
+    mamba_flops = ssm_flops + mamba_projectors_flops + mamba_conv_flops
+    return mamba_flops
+
 # calculates the flops of a model given its hparams
 def calc_params(args):
     if args.num_experts > 1:
@@ -91,12 +120,10 @@ def calc_params(args):
     if args.ffn_hidden_size is None:
         args.ffn_hidden_size = 4* args.hidden_size
 
-    d_inner = args.hidden_size * args.expansion_factor
-    dt_rank = math.ceil(args.hidden_size / 16) if args.dt_rank == "auto" else args.dt_rank
-    ssm_flops = iter_factor * d_inner * args.tokens * (11 * args.state_size + 4 * dt_rank + 1) * args.num_mamba_layers
-    mamba_projectors_flops = iter_factor * args.tokens * 6 * d_inner * args.hidden_size * args.num_mamba_layers
-    mamba_conv_flops = iter_factor * args.tokens * 2 * d_inner * args.conv_dimension * args.num_mamba_layers
-    mamba_flops = ssm_flops + mamba_projectors_flops + mamba_conv_flops
+    mamba_flops = compute_mamba_flops(args)
+    mamba2_flops = compute_mamba2_flops(args)
+
+
     # no activation checkpointing for embeddings
     embedding_flops = 6 * args.tokens * args.hidden_size * args.vocab_size
 
