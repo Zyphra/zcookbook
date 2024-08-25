@@ -95,7 +95,7 @@ Dense hybrid architectures combine the strengths of both dense transformers and 
 
 During the model planning phase, it's common to calculate what models will fit into a given budget of parameters, FLOPs, and inference/training memory. In this cookbook we present scripts we use internally to compute the parameters and FLOPs for a given model architecture and sizing. We see this as an extension of the [EleutherAI cookbook](https://github.com/EleutherAI/cookbook) but specialized to SSMs and hybrid models.
 
-## SSM Calculations
+## SSM and Hybrid Calculations
 
 We create calculation scripts for the parameters and FLOPs of mamba models in https://github.com/Zyphra/cookbook/tree/main/calc as well as a detailed walkthrough of the calculations performed in these scripts.
 
@@ -103,10 +103,6 @@ We create calculation scripts for the parameters and FLOPs of mamba models in ht
 ## Transformer Calculations
 
 For dense and MoE transformers, we recommend using the [EleutherAI cookbook](https://github.com/EleutherAI/cookbook) by Quentin Anthony, Hailey Schoelkopf, and Stella Biderman.
-
-## Hybrid Calculations
-(TODO: Quentin/Beren/Paolo)
-
 
 ## Token Calculation
 
