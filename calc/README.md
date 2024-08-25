@@ -153,7 +153,7 @@ pip install transformers datasets
 Run the script from the command line with the following arguments:
 
 ```
-python token_calculation.py --hf-path <dataset_path> --hf-tokenizer <tokenizer_path> [OPTIONS]
+python tokenize_and_count.py --hf-path <dataset_path> --hf-tokenizer <tokenizer_path> [OPTIONS]
 ```
 
 
@@ -172,7 +172,7 @@ python token_calculation.py --hf-path <dataset_path> --hf-tokenizer <tokenizer_p
 ### Example
 
 ```
-python token_calculation.py --hf-path "dataset/my_dataset" --hf-tokenizer "bert-base-uncased" --key "content" --save-path "./tokenized_dataset" --num-proc 4
+python tokenize_and_count.py --hf-path "dataset/my_dataset" --hf-tokenizer "bert-base-uncased" --key "content" --save-path "./tokenized_dataset" --num-proc 4
 ```
 
 
