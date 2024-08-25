@@ -10,6 +10,8 @@ COMMS_BENCH_DIR = os.path.join(os.path.dirname(__file__), "../")
 sys.path.append(COMMS_BENCH_DIR)
 from .constants import *
 
+os.environ['JAX_THREEFY_TIMEOUT'] = str(DEFAULT_JAX_TIMEOUT)
+
 def print_rank_0(message):
     if jax.process_index() == 0:
         print(message)
