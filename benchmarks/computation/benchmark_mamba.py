@@ -2,7 +2,7 @@ import argparse
 import torch
 import math
 from mamba_ssm import Mamba
-from benchmarks.computation.utils import time_fwd_bwd, ns_per_param
+from utils import time_fwd_bwd
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Benchmark Mamba')
@@ -10,6 +10,7 @@ def parse_arguments():
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose output')
     parser.add_argument('--seqlen', type=int, default=1024, help='Sequence length')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
+    parser.add_argument('--d_conv', type=int, default=4, help='Dimension of convolution kernel')
     parser.add_argument('--d_model', type=int, default=2048, help='Model dimension')
     parser.add_argument('--d_state', type=int, default=64, help='State dimension')
     parser.add_argument('--expand', type=int, default=2, help='Expansion factor')
@@ -19,7 +20,7 @@ def parse_arguments():
 
 def flops_mamba(hidden_size, expansion_factor, state_size, seqlen, batch_size, conv_dimension, num_layers, dt_rank="auto", mode="fwd"):
     assert mode in ["fwd", "bwd", "fwd_bwd"]
-    iter_factor = 3 if mode == "fwd" else 4
+    iter_factor = 1 if mode == "fwd" else (2 if mode == "bwd" else 3)
     d_inner = hidden_size * expansion_factor
     dt_rank = math.ceil(hidden_size / 16) if dt_rank == "auto" else dt_rank
     ssm_flops = iter_factor * d_inner * seqlen * batch_size * (11 * state_size + 4 * dt_rank + 1) * num_layers
@@ -50,6 +51,7 @@ def main():
     d_model = args.d_model
     d_state = args.d_state
     expand = args.expand
+    d_conv = args.d_conv
 
     input = torch.randn(batch_size, seqlen, d_model, device=args.device, dtype=dtype, requires_grad=True)
     model = Mamba(d_model=d_model, d_state=d_state, expand=expand, device=args.device, dtype=dtype)
@@ -64,9 +66,9 @@ def main():
     # Benchmark
     f, b = time_fwd_bwd(model, input, repeats=args.repeats, verbose=args.verbose)
 
-    fwd_flops = flops_mamba(batch_size, seqlen, d_model, d_state, expand, mode="fwd")
-    bwd_flops = flops_mamba(batch_size, seqlen, d_model, d_state, expand, mode="bwd")
-    fwd_bwd_flops = flops_mamba(batch_size, seqlen, d_model, d_state, expand, mode="fwd_bwd")
+    fwd_flops = flops_mamba(d_model, expand, d_state, seqlen, batch_size, d_conv, 1, mode="fwd")
+    bwd_flops = flops_mamba(d_model, expand, d_state, seqlen, batch_size, d_conv, 1, mode="bwd")
+    fwd_bwd_flops = flops_mamba(d_model, expand, d_state, seqlen, batch_size, d_conv, 1, mode="fwd_bwd")
 
     print(f"### d_model={d_model}, d_state={d_state}, expand={expand}, batch_size={batch_size}, seqlen={seqlen} ###")
     print(f"Mamba FWD Latency: {pretty_print_latency(f)}")
@@ -75,9 +77,6 @@ def main():
     print(f"Mamba FWD Throughput: {efficiency(fwd_flops, f):.2f} TFLOPs/s")
     print(f"Mamba BWD Throughput: {efficiency(bwd_flops, b):.2f} TFLOPs/s")
     print(f"Mamba FWD+BWD Throughput: {efficiency(fwd_bwd_flops, f + b):.2f} TFLOPs/s")
-    print(f"Mamba FWD Speed: {ns_per_param(f, num_params):.5f} ns/param")
-    print(f"Mamba BWD Speed: {ns_per_param(b, num_params):.5f} ns/param")
-    print(f"Mamba FWD+BWD Speed: {ns_per_param(f + b, num_params):.5f} ns/param")
 
 if __name__ == "__main__":
     main()
