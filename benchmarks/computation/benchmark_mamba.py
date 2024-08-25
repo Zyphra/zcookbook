@@ -54,7 +54,7 @@ def main():
     d_conv = args.d_conv
 
     input = torch.randn(batch_size, seqlen, d_model, device=args.device, dtype=dtype, requires_grad=True)
-    model = Mamba(d_model=d_model, d_state=d_state, expand=expand, device=args.device, dtype=dtype)
+    model = Mamba(d_model=d_model, d_state=d_state, expand=expand, device=args.device, dtype=dtype, d_conv=d_conv)
 
     num_params = sum(p.numel() for p in model.parameters())
 
