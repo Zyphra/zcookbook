@@ -132,11 +132,11 @@ def attn_flops(batch, seqlen, headdim, nheads, causal, mode="fwd"):
     return f if mode == "fwd" else (2.5 * f if mode == "bwd" else 3.5 * f)
 
 
-def mamba1_flops():
+#def mamba1_flops():
 
 
 
-def mamba2_flops():
+#def mamba2_flops():
 
 
 def efficiency(flop, time):
