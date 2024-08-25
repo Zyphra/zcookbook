@@ -170,7 +170,7 @@ Papers on Annealing/LR
 We performed significant ablations to explore the LR schedule. We made the following observations: 
 - **The precise form of the LR decay (whether linear, cosine, or exponential) has relatively little effect on the final eval performance.** 
 - The primary determinant of performance was the initial maximum LR of the annealing phase. 
-- Unlike miniCPM, we found that re-warming up the LR to a large percentage (approximately 75%) of the original LR used in the pre-training phase and then decaying to zero outperformed starting at the final LR of the pre-training phase. After many ablations, we believe this is due to the fact that rewarming causes a significantly faster decay at the beginning of the annealing phase since the decay occurs over a much greater range in the same number of tokens.
+- Unlike miniCPM, we found that re-warming up the LR to a large percentage (approximately 75%) of the original LR used in the pre-training phase and then decaying to zero outperformed starting at the final LR of the pre-training phase. We believe the reason that rewarmup outperforms is due to the fact that rewarming results in a significantly faster learning rate decay at the beginning of the annealing phase. This is because the difference between the initial and final learning rate of the annealing phase is larger than if the annealing had begun at the learning rate where the phase 1 pretraining finished.
 
 ### What is replay? How much do you need?
 
