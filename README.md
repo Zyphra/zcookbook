@@ -140,8 +140,8 @@ We perform all our training using PyTorch within our custom internal fork of [Me
 We find, following [miniCPM](https://arxiv.org/html/2404.06395v1), that a simple curriculum training approach of increasing the proportion of higher quality tokens towards the end of training can significantly improve performance. 
 
 'High quality' is obviously subjective in part but we find that documents containing fact-rich information to be the most performant. Examples include:
+- Instruction following, which was particularly effective
 - Wikipedia and arxiv papers
-- Instruction following and chat data 
 - Synthetic fact-enhanced textbook style data such as [cosmopedia](https://huggingface.co/blog/cosmopedia).
 
 In terms of the amount of annealing data, we find in general that more is better, although we are generally constrained by amount of available annealing data so that we have not been able to test truly large (>200B tokens) amounts of such data. This fits with the miniCPM findings of setting annealing to be about 10% of the total tokens of a run. We find that multiple epochs of annealing data do not appear to harm performance, yet beyond 2 epochs give little performance improvement. 
