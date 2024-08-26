@@ -79,8 +79,9 @@ def config_parser():
                         help='Number of tokens you are training over')
     parser.add_argument("--no-checkpoint-activations", "-ca",
                         action='store_false',
-                        help='Whether Megatron-style activation checkpointing is being used',
+                        help='Whether activation checkpointing is being used',
                         dest='checkpoint_activations')
+    parser.add_argument("--mamba_moe_layers", type = str, default = "")
     return parser
 
 def compute_mamba2_flops(args):
@@ -97,14 +98,30 @@ def compute_mamba2_flops(args):
 def compute_mamba_flops(args):
     d_inner = args.hidden_size * args.expansion_factor
     dt_rank = math.ceil(args.hidden_size / 16) if args.dt_rank == "auto" else args.dt_rank
-    ssm_flops = iter_factor * d_inner * args.tokens * (11 * args.state_size + 4 * dt_rank + 1) * args.num_mamba_layers
-    mamba_projectors_flops = iter_factor * args.tokens * 6 * d_inner * args.hidden_size * args.num_mamba_layers
-    mamba_conv_flops = iter_factor * args.tokens * 2 * d_inner * args.conv_dimension * args.num_mamba_layers
+    ssm_flops = iter_factor * d_inner * args.tokens * (11 * args.state_size + 4 * dt_rank + 1)
+    mamba_projectors_flops = iter_factor * args.tokens * 6 * d_inner * args.hidden_size 
+    mamba_conv_flops = iter_factor * args.tokens * 2 * d_inner * args.conv_dimension
     mamba_flops = ssm_flops + mamba_projectors_flops + mamba_conv_flops
     return mamba_flops
 
+def compute_attention_flops(args):
+    qkv_flops = int(iter_factor * 2 * (1 + 2 * args.kv_size_ratio) * args.batch_size * args.hidden_size * args.hidden_size)
+    attention_matrix_flops = iter_factor * 2 * args.batch_size * args.sequence_length * args.hidden_size
+    attention_over_values_flops = iter_factor * 2 * args.batch_size * args.sequence_length * args.hidden_size
+    linear_projection_flops = iter_factor * 2 * args.batch_size * args.hidden_size * args.hidden_size
+    return qkv_flops + attention_matrix_flops + attention_over_values_flops + linear_projection_flops 
+
+def compute_ffn_flops(args):
+    if args.ffn_hidden_size is not None:
+        ffn_flops = int(2 * args.batch_size * args.ffn_hidden_size * args.ffn_hidden_size)
+    else:
+        ffn_flops = int(2  * args.ffn_expansion_factor) * args.batch_size * args.hidden_size * args.hidden_size
+    return ffn_flops
+
+
+
 # calculates the flops of a model given its hparams
-def calc_params(args):
+def calc_flops(args):
     if args.num_experts > 1:
         assert args.topk <= args.num_experts, "You cannot route to more experts than you have!"
     
@@ -122,19 +139,51 @@ def calc_params(args):
 
     mamba_flops = compute_mamba_flops(args)
     mamba2_flops = compute_mamba2_flops(args)
+    attention_flops = compute_attention_flops(args)
+    ffn_flops = compute_ffn_flops(args)
 
 
     # no activation checkpointing for embeddings
     embedding_flops = 6 * args.tokens * args.hidden_size * args.vocab_size
 
-    total_flops = embedding_flops + mamba_flops
-
-    if args.num_moe_layers > 0:
-        ffn_flops = iter_factor * args.tokens  * 4 * args.ffn_hidden_size * args.num_moe_layers * args.hidden_size
-        if args.swiglu:
-            ffn_flops = 3/2 * ffn_flops
-        gating_flops = iter_factor * 2 * args.tokens * args.num_experts * args.num_moe_layers
-        total_flops += ffn_flops + gating_flops
+    if args.mamba_moe_layers == "":
+        # assume a pure mamba1 model unless specified otherwise
+        total_flops = embedding_flops + (mamba_flops * args.num_mamba_layers)
+        # if MoE layers add these in
+        if args.num_moe_layers > 0:
+            ffn_flops = iter_factor * args.tokens  * 4 * args.ffn_hidden_size * args.num_moe_layers * args.hidden_size
+            if args.swiglu:
+                ffn_flops = 3/2 * ffn_flops
+            gating_flops = iter_factor * 2 * args.tokens * args.num_experts * args.num_moe_layers
+            total_flops += ffn_flops + gating_flops
+        
+    else:
+        arch_list = args.mamba_moe_layers.split(" ")
+        total_flops = 0
+        total_flops += embedding_params
+        for el in arch_list:
+            if el == "r":
+                # mamba layer
+                total_flops += mamba_flops
+            elif el == "m":
+                total_flops += mamba2_flops
+            elif el == "a":
+                total_flops += attention_flops 
+            elif el.isnumeric():
+                total_flops ++ ffn_flops
+            elif el == "g":
+                # zamba shared layer
+                original_hidden_size = args.hidden_size
+                args.hidden_size = original_hidden_size * 2
+                total_flops += compute_attention_flops(args)
+                total_flops += compute_ffn_flops(args)
+                args.hidden_size = original_hidden_size
+                # final downprojector matrix
+                total_flops += 4 * args.batch_size * args.sequence_length * args.hidden_size * args.hidden_size
+            else:
+                raise ValueError("Invalid layer string: " + str(el) " not recognized.")
+    
+    total_flops *= iter_factor
 
     print(f'Calculating number of FLOPs with training configuration: {vars(args)}\n')
     print(f'SSM FLOPs: {convert_flops(ssm_flops)}')
