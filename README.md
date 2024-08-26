@@ -182,3 +182,22 @@ Concretely, our reccomendations for annealing are:
 2. Anneal with a replay fraction of between 50-70% tokens from the pre-training dataset.
 3. The decay shape does not matter that much (cosine is fine).
 4. Use a max LR of about 75% of original max LR that was used in the pre-training phase, and use a linear warmup from 0 to this max annealing LR over a few thousand iterations.
+
+
+## Contributing
+
+If you found a bug, typo, or would like to propose an improvement please don't hesitate to open an [Issue](https://github.com/Zyphra/zcookbook/issues) or contribute a [PR](https://github.com/Zyphra/zcookbook/pulls).
+
+## Cite As
+
+If you found this repository helpful, please consider citing it using
+
+```bibtex
+@misc{anthony2024zcookbook,
+    title = {{The Zyphra Cookbook}},
+    author = {Anthony, Quentin and Millidge, Beren and Glorioso, Paolo and Tokpanov, Yury},
+    howpublished = {GitHub Repo},
+    url = {https://github.com/Zyphra/zcookbook},
+    year = {2024}
+}
+```
