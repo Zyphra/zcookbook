@@ -1,3 +1,5 @@
+<img src="imgs/zcookbook.jpg" width="400" alt="Image Credit: FLUX">
+
 # The Zyphra Training Cookbook
 By Quentin Anthony, Beren Millidge, Paolo Glorioso, and Yury Tokpanov
 
