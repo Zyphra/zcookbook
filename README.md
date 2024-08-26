@@ -1,6 +1,6 @@
 <img src="imgs/zcookbook.jpg" width="400" alt="Image Credit: FLUX">
 
-# The Zyphra Training Cookbook
+# The Zyphra Cookbook
 By Quentin Anthony, Beren Millidge, Paolo Glorioso, and Yury Tokpanov
 
 Training hybrid models is hard, and papers tend to gloss over the practical engineering work that goes into building good ones. The purpose of this cookbook is to enable other technical groups to hit the ground running when building their own hybrid (SSM, Transformer, MoE) models.
@@ -108,7 +108,7 @@ For dense and MoE transformers, we recommend using the [EleutherAI cookbook](htt
 
 ## Token Calculation
 
-We provide a script at https://github.com/Zyphra/cookbook/tree/main/calc/data/tokenize_and_count.py that tokenizes text data from a Hugging Face dataset, calculates the total number of tokens, and optionally saves the tokenized dataset.
+We provide a script at https://github.com/Zyphra/zcookbook/tree/main/calc/data/tokenize_and_count.py that tokenizes text data from a Hugging Face dataset, calculates the total number of tokens, and optionally saves the tokenized dataset.
 
 
 # Benchmarks
@@ -116,7 +116,7 @@ We provide a script at https://github.com/Zyphra/cookbook/tree/main/calc/data/to
 
 ## Block Benchmarks and Sizing
 
-We provide computation benchmarks for hybrid model blocks such as attention, Mamba1, and Mamba2 in https://github.com/Zyphra/cookbook/tree/main/benchmarks/computation. These are useful for comparing hardware performance and for [efficiently sizing models](https://arxiv.org/abs/2401.14489).
+We provide computation benchmarks for hybrid model blocks such as attention, Mamba1, and Mamba2 in https://github.com/Zyphra/zcookbook/tree/main/benchmarks/computation. These are useful for comparing hardware performance and for [efficiently sizing models](https://arxiv.org/abs/2401.14489).
 
 
 ## Communication
@@ -125,7 +125,7 @@ For communication benchmarks, there are two levels of tests:
 1. Microbrenchmarks in C/CUDA/C++ such as [OSU-Microbenchmarks](https://mvapich.cse.ohio-state.edu/benchmarks/) and [NCCL-tests](https://github.com/NVIDIA/nccl-tests). These are best for checking hardware, low-level communication software and drivers, and low-level communication optimizations (e.g. [SHARP](), communication algorithm tuning, etc).
 2. Framework-level benchmarks in PyTorch/Jax such as those in the [EleutherAI cookbook](https://github.com/EleutherAI/cookbook). These are best to ensure that framework properties (e.g. synchronization, tensor dtype handling, etc) preserve the performance of microbenchmarks, and measure performance effects of framework-level optimizations (e.g. [tensor fusion/bucketing](https://pytorch.org/docs/stable/notes/ddp.html#internal-design), [CUDA graphs](https://pytorch.org/blog/accelerating-pytorch-with-cuda-graphs/), etc) and communication in the context of applications (e.g. communication/computation overlap)
 
-In this cookbook, we provide framework-level benchmarks in Jax at https://github.com/Zyphra/cookbook/tree/main/benchmarks/communication. Why Jax when our model training code is in PyTorch? Because we needed to deeply understand the communication behavior of Jax comms for our [Tree Attention](https://www.zyphra.com/post/tree-attention-topology-aware-decoding-for-long-context-attention-on-gpu-clusters) work!
+In this cookbook, we provide framework-level benchmarks in Jax at https://github.com/Zyphra/zcookbook/tree/main/benchmarks/communication. Why Jax when our model training code is in PyTorch? Because we needed to deeply understand the communication behavior of Jax comms for our [Tree Attention](https://www.zyphra.com/post/tree-attention-topology-aware-decoding-for-long-context-attention-on-gpu-clusters) work!
 
 # Training
 
