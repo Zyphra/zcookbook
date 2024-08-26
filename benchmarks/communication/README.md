@@ -1,5 +1,3 @@
-Here's an updated README to reflect the new JAX-only implementation:
-
 # JAX Communication Benchmarks
 
 The intent of these benchmarks is to measure communication latency/bandwidth of JAX collective communication operations at the Python layer. These benchmarks are complementary to C-level comms benchmarks like [OSU Micro-Benchmarks](https://mvapich.cse.ohio-state.edu/benchmarks/) and [NCCL Tests](https://github.com/NVIDIA/nccl-tests) in that users can:
@@ -34,7 +32,7 @@ Finally, users can choose specific communication operations to run in `run_all.p
 python run_all.py --scan --all-reduce --broadcast
 </pre>
 
-There is a wide range of arguments available:
+For usage information:
 
 ```
 usage: run_all.py [-h] [--trials TRIALS] [--warmups WARMUPS] [--maxsize MAXSIZE]
