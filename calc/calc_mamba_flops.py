@@ -75,7 +75,7 @@ def config_parser():
                     help='Use swiglu MLP. If set, ffn-hidden-size is defined as the inner dimension of each of the three MLP weights.')    
     parser.add_argument("--tokens",
                         type=int,
-                        default=300e9,
+                        default=None,
                         help='Number of tokens you are training over')
     parser.add_argument("--no-checkpoint-activations", "-ca",
                         action='store_false',
@@ -142,6 +142,11 @@ def calc_flops(args):
     attention_flops = compute_attention_flops(args)
     ffn_flops = compute_ffn_flops(args)
 
+    total_mamba_flops = 0
+    total_mamba2_flops = 0
+    total_attention_flops = 0
+    total_ffn_flops = 0
+
 
     # no activation checkpointing for embeddings
     embedding_flops = 6 * args.tokens * args.hidden_size * args.vocab_size
@@ -149,6 +154,7 @@ def calc_flops(args):
     if args.mamba_moe_layers == "":
         # assume a pure mamba1 model unless specified otherwise
         total_flops = embedding_flops + (mamba_flops * args.num_mamba_layers)
+        total_mamba_flops += mamba_flops * args.num_mamba_layers)
         # if MoE layers add these in
         if args.num_moe_layers > 0:
             ffn_flops = iter_factor * args.tokens  * 4 * args.ffn_hidden_size * args.num_moe_layers * args.hidden_size
@@ -156,6 +162,7 @@ def calc_flops(args):
                 ffn_flops = 3/2 * ffn_flops
             gating_flops = iter_factor * 2 * args.tokens * args.num_experts * args.num_moe_layers
             total_flops += ffn_flops + gating_flops
+            total_ffn_flops += ffn_flops
         
     else:
         arch_list = args.mamba_moe_layers.split(" ")
@@ -165,18 +172,26 @@ def calc_flops(args):
             if el == "r":
                 # mamba layer
                 total_flops += mamba_flops
+                total_mamba_flops += mamba_flops
             elif el == "m":
                 total_flops += mamba2_flops
+                total_mamba2_flops += mamba2_flops
             elif el == "a":
                 total_flops += attention_flops 
+                total_attention_flops += attention_flops
             elif el.isnumeric():
-                total_flops ++ ffn_flops
+                total_flops += ffn_flops
+                total_ffn_flops += ffn_flops
             elif el == "g":
                 # zamba shared layer
                 original_hidden_size = args.hidden_size
                 args.hidden_size = original_hidden_size * 2
-                total_flops += compute_attention_flops(args)
-                total_flops += compute_ffn_flops(args)
+                shared_attention_flops = compute_attention_flops(args)
+                shared_ffn_flops = compute_ffn_flops(args)
+                total_flops += shared_attention_flops
+                total_attention_flops += shared_attention_flops
+                total_flops += shared_ffn_flops
+                total_ffn_flops = shared_ffn_flops
                 args.hidden_size = original_hidden_size
                 # final downprojector matrix
                 total_flops += 4 * args.batch_size * args.sequence_length * args.hidden_size * args.hidden_size
@@ -186,18 +201,18 @@ def calc_flops(args):
     total_flops *= iter_factor
 
     print(f'Calculating number of FLOPs with training configuration: {vars(args)}\n')
-    print(f'SSM FLOPs: {convert_flops(ssm_flops)}')
-    print(f'Mamba projectors FLOPs: {convert_flops(mamba_projectors_flops)}')
-    print(f'Mamba pre-SSM convolution FLOPs: {convert_flops(mamba_conv_flops)}')
-    print(f'Total Mamba FLOPs: {convert_flops(mamba_flops)}')
-    if args.num_moe_layers > 0:
-        print(f'MoE FFN FLOPs: {convert_flops(ffn_flops)}')
-        print(f'MoE gating FLOPs: {convert_flops(gating_flops)}')
+    print(f'Total Mamba FLOPs: {convert_flops(total_mamba_flops)}')
+    print(f'Total Mamba2 FLOPs: {convert_flops(total_mamba2_flops)}')
+    print(f'Total Attention FLOPs: {convert_flops(total_attention_flops)}')
+    print(f'Total FFN FLOPs: {convert_flops(total_ffn_flops)}')
     print(f'Embedding FLOPs: {convert_flops(embedding_flops)}')
     print(f'Total FLOPs for the Model: {convert_flops(total_flops)}')
+    if args.tokens is not None:
+        total_flops_through_training = int(total_flops * (args.tokens // args.batch_size))
+        print(f'Total FLOPs through training: {convert_flops(total_flops_through_training)}')
 
 if __name__ == "__main__":
     print('\nExample: python calc_mamba_moe_flops.py -num-mamba-layers 12 -hs 768 --num-experts 8 --num-moe-layers 12 -s 2048 --tokens 300e9')
     
     args = config_parser().parse_args()
-    calc_params(args)
+    calc_flops(args)
