@@ -64,7 +64,7 @@ Let's talk about model architectures. Why do we think hybrids offer the best mod
 
 Dense transformers, are primarily composed of alternating multi-head attention (MHA) and multilayer perceptron (MLP) blocks. We believe dense transformers have the following shortcomings:
 1. The attention operation is still not efficient at long sequence lengths, despite recent [single-GPU efforts](https://arxiv.org/abs/2205.14135) and [distributed context efforts](https://arxiv.org/abs/2408.04093)
-2. Attention blocks are correlated across depth, which is a waste of parameters and FLOPs
+2. Attention blocks are correlated across model depth, which is a waste of parameters and FLOPs
 
 
 ### MoE Architectures
@@ -121,13 +121,11 @@ We provide computation benchmarks for hybrid model blocks such as attention, Mam
 
 ## Communication
 
-We provide communication benchmarks in Jax at https://github.com/Zyphra/cookbook/tree/main/benchmarks/communication
-
 For communication benchmarks, there are two levels of tests: 
 1. Microbrenchmarks in C/CUDA/C++ such as [OSU-Microbenchmarks](https://mvapich.cse.ohio-state.edu/benchmarks/) and [NCCL-tests](https://github.com/NVIDIA/nccl-tests). These are best for checking hardware, low-level communication software and drivers, and low-level communication optimizations (e.g. [SHARP](), communication algorithm tuning, etc).
 2. Framework-level benchmarks in PyTorch/Jax such as those in the [EleutherAI cookbook](https://github.com/EleutherAI/cookbook). These are best to ensure that framework properties (e.g. synchronization, tensor dtype handling, etc) preserve the performance of microbenchmarks, and measure performance effects of framework-level optimizations (e.g. [tensor fusion/bucketing](https://pytorch.org/docs/stable/notes/ddp.html#internal-design), [CUDA graphs](https://pytorch.org/blog/accelerating-pytorch-with-cuda-graphs/), etc) and communication in the context of applications (e.g. communication/computation overlap)
 
-In this cookbook, we provide framework-level benchmarks in Jax at https://github.com/Zyphra/cookbook/tree/main/benchmarks/communication
+In this cookbook, we provide framework-level benchmarks in Jax at https://github.com/Zyphra/cookbook/tree/main/benchmarks/communication. Why Jax when our model training code is in PyTorch? Because we needed to deeply understand the communication behavior of Jax comms for our [Tree Attention](https://www.zyphra.com/post/tree-attention-topology-aware-decoding-for-long-context-attention-on-gpu-clusters) work!
 
 # Training
 
