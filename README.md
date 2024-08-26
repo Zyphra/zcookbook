@@ -99,7 +99,7 @@ During the model planning phase, it's common to calculate what models will fit i
 
 ## SSM and Hybrid Calculations
 
-We create calculation scripts for the parameters and FLOPs of mamba models in https://github.com/Zyphra/cookbook/tree/main/calc as well as a detailed walkthrough of the calculations performed in these scripts.
+We create calculation scripts for the parameters and FLOPs of mamba models in https://github.com/Zyphra/zcookbook/tree/main/calc as well as a detailed walkthrough of the calculations performed in these scripts.
 
 
 ## Transformer Calculations
