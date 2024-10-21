@@ -44,18 +44,18 @@ MLP layers:
 
 For each MLP layer per token we perform $$2 \times 4h \times h$$ operations (2 from the multiply + accumulate). There are two MLP layers per MLP block (mlp_in and mlp_out). This gives us $$16bslh^2$$ flops for the forward pass and thus $$32blsh^2$$ for the backwards pass and weight update (approximately 2x as much) for a total of $$48blsh^2$$ FLOPs for step of the MLP layers.
 
-QKVO attention FLOPS
+QKVO attention FLOPs
 
-The dense matrix operations in attention have a very similar structure to the MLPs. We have four matrices (Q,K,V,O) which are applied per token and each matrix is $$h \times h$$  in size. This gives us $$4 \times 2 \times h^2$$ FLOPs per layer per token and thus $$8bslh^2$$ FLOPS in total for a forward pass and $$24bslh^2$$ FLOPS for a step.
+The dense matrix operations in attention have a very similar structure to the MLPs. We have four matrices (Q,K,V,O) which are applied per token and each matrix is $$h \times h$$  in size. This gives us $$4 \times 2 \times h^2$$ FLOPs per layer per token and thus $$8bslh^2$$ FLOPs in total for a forward pass and $$24bslh^2$$ FLOPs for a step.
 
 Attention scores and output
 
-To compute the attention matrix, we are multiplying together two $b \times s \times h$$ matrices to compute an $$b \times s \times s$$ output. The FLOP cost of this is approximately $$2 \times b \times h \times s \times s$$ . The output of the attention (multiplication of V by the attention scores) has an equal cost. We ignore the cost of performing the softmax although this may be nontrivial. This results in a total attention cost of $$4bhs^2$$ for a total step cost of $$12bhs^2$$ FLOPS.
+To compute the attention matrix, we are multiplying together two $b \times s \times h$$ matrices to compute an $$b \times s \times s$$ output. The FLOP cost of this is approximately $$2 \times b \times h \times s \times s$$ . The output of the attention (multiplication of V by the attention scores) has an equal cost. We ignore the cost of performing the softmax although this may be nontrivial. This results in a total attention cost of $$4bhs^2$$ for a total step cost of $$12bhs^2$$ FLOPs.
 
 Putting this together, we see that the total FLOP cost of a transformer model can be estimated as:
 
 $$\begin{align}
-\text{FLOPS per step} = 12bhs^2 + 72blsh^2
+\text{FLOPs per step} = 12bhs^2 + 72blsh^2
 \end{align}$$
 
 Naively, we thus see that the MLP cost dominates at least as long as the embedding dimension h is larger than the sequence dimension s. For large enough s however, the cost of the attention begins to dominate due to the quadratic dependence of attention on the sequence length.
@@ -98,21 +98,21 @@ $$\begin{align}
 
 In general, given two matrices $$A^{K \times M}$$ and $$B^{M \times J}$$ the total flops of computing their matrix product is $$2KMJ$$ where the 2 comes from the fact that there is both a multiple and an addition operation. 
 
-Let us consider the in and out projectors of Mamba. These are matrices of shape $I \times D$ being multipled with input of shape $B \times L \times D$ and there are three such matrix multiplications $$W_x, W_z, W_y$$ resulting in $$6BLID$$ FLOPS. Next is the convolution which can be treated as a single $$I \times C$$ matrix multiply requiring $$2BLIC$$ FLOPs. 
+Let us consider the in and out projectors of Mamba. These are matrices of shape $I \times D$ being multipled with input of shape $B \times L \times D$ and there are three such matrix multiplications $$W_x, W_z, W_y$$ resulting in $$6BLID$$ FLOPs. Next is the convolution which can be treated as a single $$I \times C$$ matrix multiply requiring $$2BLIC$$ FLOPs. 
 
 Now, we turn to the SSM block itself. We first compute the input-dependent B and C matrices requiring a matrix multiply of shape $$I \times H$$ each thus resulting in $$4BLIS$$ FLOPs. The A matrix is not multiplied by the input but goes through an elementwise transform costing $$IS$$ FLOPs. The dt projection first goes through an elementwise operation of order $$BLIdt$$ FLOPs.
 Next, the discretization. The A matrix is multiplied by the dt vector resulting, costing $$BLIS$$ FLOPs. The B matrix is multiplied by the dt costing $$2BLIS$$ FLOPs. The SSM linear state space step itself is just a matrix multiply and add so costs $$2BLIS$$ FLOPs, and then the output projection using the C matrix also costs $$2BLIS$$ FLOPs. Finally there is the out-projector which costs $$2BLEI$$ FLOPs Putting this all together, we obtain the following expression:
 
 $$\begin{align}
-\text{Total FLOPS} = BLI(6D + 2C + 8IS + 2E + dt) + IS
+\text{Total FLOPs} = BLI(6D + 2C + 8IS + 2E + dt) + IS
 \end{align}$$
 
-## Mamba2 FLOPS
+## Mamba2 FLOPs
 
-Computing the flops of a Mamba2 block involves going through a similar exercise. First we consider the much-enlarged in-projector of Mamba2 which is of shape $$(2I + 2GS + H) \times D$$ which is multiplied by the embedding input of size $$B \times L \times D$$. This results in $$2BL(2I + 2GS + H)D$$ FLOPS. The in-projector is then split and only the xBC matrix is passed through the conv at the FLOP cost of $$2BL(I + 2GS)C$$. Following the conv there is the computation of the ssm state matrices and multiplication by dt which costs $$2BLIS$$ FLOPS$$ and the SSM computation itself which also costs $$2BLIS$$ FLOPs. Finally, there is the multiplication by the C matrix which costs $$2BLIS$$ and the multiplication by the gate which costs $$BLI$$, and finally the multiplication by the out-projector costing $$2BLIE$$. Putting this all together we obtain:
+Computing the flops of a Mamba2 block involves going through a similar exercise. First we consider the much-enlarged in-projector of Mamba2 which is of shape $$(2I + 2GS + H) \times D$$ which is multiplied by the embedding input of size $$B \times L \times D$$. This results in $$2BL(2I + 2GS + H)D$$ FLOPs. The in-projector is then split and only the xBC matrix is passed through the conv at the FLOP cost of $$2BL(I + 2GS)C$$. Following the conv there is the computation of the ssm state matrices and multiplication by dt which costs $$2BLIS$$ FLOPs and the SSM computation itself which also costs $$2BLIS$$ FLOPs. Finally, there is the multiplication by the C matrix which costs $$2BLIS$$ and the multiplication by the gate which costs $$BLI$$, and finally the multiplication by the out-projector costing $$2BLIE$$. Putting this all together we obtain:
 
 $$\begin{align}
-\text{Total FLOPS} = BL\Big(4ID + 2GSD + 2HD + 2IC + 4GSC + 6IS + 2SD + I + 2IE + D\Big)
+\text{Total FLOPs} = BL\Big(4ID + 2GSD + 2HD + 2IC + 4GSC + 6IS + 2SD + I + 2IE + D\Big)
 \end{align}$$
 
 
@@ -121,7 +121,7 @@ $$\begin{align}
 
 ## FLOP budgets
 
-The way to think about the FLOP budget is to figure out how many TFLOPS you can get per GPU running the model and then how many days you can afford to train the model for. That is, we get
+The way to think about the FLOP budget is to figure out how many TFLOPs you can get per GPU running the model and then how many days you can afford to train the model for. That is, we get
 
 $$\begin{align}
 \text{FLOP budget} = \text{TFLOPs per GPU} \times \text{NUM GPUs} \times \text{Days} \times 24 \times 60 \times 60
