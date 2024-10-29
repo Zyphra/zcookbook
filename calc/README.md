@@ -50,7 +50,7 @@ The dense matrix operations in attention have a very similar structure to the ML
 
 Attention scores and output
 
-To compute the attention matrix, we are multiplying together two $b \times s \times h$$ matrices to compute an $$b \times s \times s$$ output. The FLOP cost of this is approximately $$2 \times b \times h \times s \times s$$ . The output of the attention (multiplication of V by the attention scores) has an equal cost. We ignore the cost of performing the softmax although this may be nontrivial. This results in a total attention cost of $$4bhs^2$$ for a total step cost of $$12bhs^2$$ FLOPs.
+To compute the attention matrix, we are multiplying together two $b \times s \times h$ matrices to compute an $$b \times s \times s$$ output. The FLOP cost of this is approximately $$2 \times b \times h \times s \times s$$ . The output of the attention (multiplication of V by the attention scores) has an equal cost. We ignore the cost of performing the softmax although this may be nontrivial. This results in a total attention cost of $$4bhs^2$$ for a total step cost of $$12bhs^2$$ FLOPs.
 
 Putting this together, we see that the total FLOP cost of a transformer model can be estimated as:
 
@@ -74,7 +74,7 @@ This refers to the original Mamba block as introduced [here](https://arxiv.org/p
 
 The Mamba layer begins with two input projections of size $$D \times I$$ which map the residual stream input into the inner dimension. There are two projections one for the SSM input itself and secondly for the gate input. This gives a total of $$2ID$$ in-projector parameters. After the in-projector there is a convolutional layer prior to the SSM. This requires $$C \times I$$ parameters plus an additional $$I$$ parameters for the convolutional bias. 
 
-This is then followed by the matrices producing the A,B, and C matrices of the SSM (similar to the QKV matrices of attention). Each of these matrices is of size $$I \times S$$ resulting in $$3IS$$ parameters. Additionally, there is the dt projector which consists of $$2 \times dt \times I$$ as well as a dt bias and the D bias vector both of length $$I$$. Finally, there is the SSM outprojector of size $$I \times D$$ which maps back to the embedding dimension of the residual stream, as well as the input layernorm which contains $2 \times D$$ parameters since its gain and bias parameters are both of shape $$D$$. 
+This is then followed by the matrices producing the A,B, and C matrices of the SSM (similar to the QKV matrices of attention). Each of these matrices is of size $$I \times S$$ resulting in $$3IS$$ parameters. Additionally, there is the dt projector which consists of $$2 \times dt \times I$$ as well as a dt bias and the D bias vector both of length $$I$$. Finally, there is the SSM outprojector of size $$I \times D$$ which maps back to the embedding dimension of the residual stream, as well as the input layernorm which contains $2 \times D$ parameters since its gain and bias parameters are both of shape $$D$$. 
 
 Putting this all together, we obtain the following count of total parameters:
 
