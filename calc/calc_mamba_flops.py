@@ -9,7 +9,7 @@ def convert_flops(params):
     i = int(math.floor(math.log(params, 1000)))
     p = math.pow(1000, i)
     s = round(params / p, 2)
-    return "%s %s" % (s, size_name[i])
+    return f"{s} {size_name[i]}"
 
 def config_parser():
     parser = argparse.ArgumentParser()
@@ -25,6 +25,14 @@ def config_parser():
                         type=int,
                         default=2048,
                         help='Sequence length used for training')
+    parser.add_argument("--batch-size", "-b",
+                        type=int,
+                        default=32,
+                        help='Training batch size')
+    parser.add_argument("--kv-size-ratio", "-kv",
+                        type=float,
+                        default=1.0,
+                        help='Ratio of kv heads to query heads used in model. 1.0 for MHA')
     parser.add_argument("--num-mamba-layers",
                         type=int,
                         default=0,
@@ -36,7 +44,7 @@ def config_parser():
     parser.add_argument("--expansion-factor", 
                         type=int,
                         default=2,
-                        help='Expansion factor relating inner dimension and hidden size (or d_model)')
+                        help='Expansion factor relating inner dimension and hidden size')
     parser.add_argument("--conv-dimension",
                         type=int,
                         default=4,
@@ -44,13 +52,12 @@ def config_parser():
     parser.add_argument("--dt-rank",
                         type=str,
                         default="auto",
-                        help='Rank of dt')    
-                            help='conv1d kernel size')
-    parser.add_argument("--mamba-ngroups", "-dc",
+                        help='Rank of dt')
+    parser.add_argument("--mamba-ngroups",
                         type=int,
                         default=1,
                         help='Number of Mamba groups')
-    parser.add_argument("--mamba-headdim", "-dc",
+    parser.add_argument("--mamba-headdim",
                         type=int,
                         default=64,
                         help='Mamba2 head dimension')
@@ -59,105 +66,137 @@ def config_parser():
                         default=0,
                         help='Number of moe layers used in model')
     parser.add_argument("--num-experts", "-e",
-                    type=int,
-                    default=0,
-                    help='Number of experts for MoE')
+                        type=int,
+                        default=0,
+                        help='Number of experts for MoE')
     parser.add_argument("--ffn-hidden-size",
                         type=int,
                         default=None,
-                        help='Hidden dimension of the MLP')
+                        help='Hidden dimension of the FFN')
+    parser.add_argument("--ffn-expansion-factor", "-ff",
+                        type=int,
+                        default=4,
+                        help='How much the MLP hidden size expands')
+    parser.add_argument("--num-mlp-linears", "-nl",
+                        type=int,
+                        default=2,
+                        help='How many linear layers per MLP block. Set to 3 for SwiGLU or GEGLU Llama-style gated MLPs.')
     parser.add_argument("--topk", "-t",
                         type=int,
                         default=1,
                         help='Top k routing for MoE')
     parser.add_argument("--swiglu",
-                    action="store_true",
-                    help='Use swiglu MLP. If set, ffn-hidden-size is defined as the inner dimension of each of the three MLP weights.')    
+                        action="store_true",
+                        help='Use swiglu FFN')    
     parser.add_argument("--tokens",
-                        type=int,
-                        default=None,
+                        type=float,
+                        default=300e9,
                         help='Number of tokens you are training over')
     parser.add_argument("--no-checkpoint-activations", "-ca",
                         action='store_false',
                         help='Whether activation checkpointing is being used',
                         dest='checkpoint_activations')
-    parser.add_argument("--mamba_moe_layers", type = str, default = "")
+    parser.add_argument("--mamba-moe-layers",
+                        type=str,
+                        default="",
+                        help='Layer configuration string')
     return parser
 
+def compute_mamba1_flops(args, iter_factor):
+    d_inner = args.hidden_size * args.expansion_factor
+    dt_rank = math.ceil(args.hidden_size / 16) if args.dt_rank == "auto" else int(args.dt_rank)
+    
+    # SSM state computation
+    ssm_flops = iter_factor * d_inner * args.tokens * (11 * args.state_size + 4 * dt_rank + 1)
+    # Input and output projections
+    mamba_projectors_flops = iter_factor * args.tokens * 6 * d_inner * args.hidden_size 
+    # Convolution operations
+    mamba_conv_flops = iter_factor * args.tokens * 2 * d_inner * args.conv_dimension
+    
+    mamba1_flops = ssm_flops + mamba_projectors_flops + mamba_conv_flops
+    return mamba1_flops
+
 def compute_mamba2_flops(args):
-    d_inner = args.hidden_size * args.expand
+    d_inner = args.hidden_size * args.expansion_factor
     Nheads = d_inner // args.mamba_headdim
-    mamba2_block_flops = 2 * (2 * d_inner + 2 * args.mamba_ngroups  * args.state_size + Nheads) * args.hidden_size * args.batch_size * args.sequence_length # in proj
-    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.conv_dimension * args.d_inner# conv
-    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * args.d_inner # dtbx
-    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size # ssm state rollover
-    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * args.d_model # c-> y 
-    mamba2_block_flops += args.batch_size * args.sequence_length * args.hidden_size # z gate output
+    
+    # Input projections
+    mamba2_block_flops = 2 * (2 * d_inner + 2 * args.mamba_ngroups * args.state_size + Nheads) * args.hidden_size * args.batch_size * args.sequence_length
+    # Convolution computations
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.conv_dimension * d_inner
+    # S4D core computations
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * d_inner
+    # State updates
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size
+    # Output projections
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * args.hidden_size
+    # Final gating
+    mamba2_block_flops += args.batch_size * args.sequence_length * args.hidden_size
     return mamba2_block_flops
 
-def compute_mamba_flops(args):
-    d_inner = args.hidden_size * args.expansion_factor
-    dt_rank = math.ceil(args.hidden_size / 16) if args.dt_rank == "auto" else args.dt_rank
-    ssm_flops = iter_factor * d_inner * args.tokens * (11 * args.state_size + 4 * dt_rank + 1)
-    mamba_projectors_flops = iter_factor * args.tokens * 6 * d_inner * args.hidden_size 
-    mamba_conv_flops = iter_factor * args.tokens * 2 * d_inner * args.conv_dimension
-    mamba_flops = ssm_flops + mamba_projectors_flops + mamba_conv_flops
-    return mamba_flops
-
-def compute_attention_flops(args):
+def compute_attention_flops(args, iter_factor):
+    # An A_(m x k) X B_(k x n) matrix multiplication requires 2m x k x n FLOPs (multiplies and adds)
     qkv_flops = int(iter_factor * 2 * (1 + 2 * args.kv_size_ratio) * args.batch_size * args.hidden_size * args.hidden_size)
     attention_matrix_flops = iter_factor * 2 * args.batch_size * args.sequence_length * args.hidden_size
     attention_over_values_flops = iter_factor * 2 * args.batch_size * args.sequence_length * args.hidden_size
     linear_projection_flops = iter_factor * 2 * args.batch_size * args.hidden_size * args.hidden_size
     return qkv_flops + attention_matrix_flops + attention_over_values_flops + linear_projection_flops 
 
-def compute_ffn_flops(args):
+def compute_ffn_flops(args, iter_factor):
+    # If custom FFN hidden size is provided, use that
     if args.ffn_hidden_size is not None:
-        ffn_flops = int(2 * args.batch_size * args.ffn_hidden_size * args.ffn_hidden_size)
+        intermediate_dim = args.ffn_hidden_size
     else:
-        ffn_flops = int(2  * args.ffn_expansion_factor) * args.batch_size * args.hidden_size * args.hidden_size
+        # Otherwise use the expansion factor
+        intermediate_dim = args.hidden_size * args.ffn_expansion_factor
+    
+    # Calculate FFN FLOPs based on number of linear layers
+    ffn_flops = int(iter_factor * 2 * args.num_mlp_linears * args.batch_size * args.sequence_length * 
+                    args.hidden_size * intermediate_dim)
+    
+    if args.swiglu:
+        # For SwiGLU, add 50% more FLOPs to account for the extra gating computation
+        ffn_flops = int(ffn_flops * 1.5)
+        
     return ffn_flops
 
-
-
-# calculates the flops of a model given its hparams
 def calc_flops(args):
     if args.num_experts > 1:
         assert args.topk <= args.num_experts, "You cannot route to more experts than you have!"
-    
-
-    # An A_(m x k) X B_(k x n) matrix multiplication requires 2m x k x n FLOPs (factor of 2 needed to account for multiplies and adds)
+    if args.tokens is not None:
+        args.tokens = int(args.tokens)
 
     # determine the flops factor. 
-    # If no activation checkpointing/recomputation, 1 for fwd and 2 for bwd (because we need to calculate the grads with respect to both the input and weight tensors). 
-    # If activation checkpointing/recomputation, add 1 more for the next full forward pass
-    iter_factor = 3
-    if args.checkpoint_activations:
-        iter_factor += 1
+    # If no activation checkpointing: 1 for fwd and 2 for bwd
+    # If activation checkpointing: add 1 more for recomputation
+    iter_factor = 4 if args.checkpoint_activations else 3
+    
     if args.ffn_hidden_size is None:
-        args.ffn_hidden_size = 4* args.hidden_size
+        args.ffn_hidden_size = 4 * args.hidden_size
 
-    mamba_flops = compute_mamba_flops(args)
+    # Calculate component FLOPs
+    mamba1_flops = compute_mamba1_flops(args, iter_factor)
     mamba2_flops = compute_mamba2_flops(args)
-    attention_flops = compute_attention_flops(args)
-    ffn_flops = compute_ffn_flops(args)
+    attention_flops = compute_attention_flops(args, iter_factor)
+    ffn_flops = compute_ffn_flops(args, iter_factor)
 
-    total_mamba_flops = 0
+    # Initialize tracking variables
+    total_mamba1_flops = 0
     total_mamba2_flops = 0
     total_attention_flops = 0
     total_ffn_flops = 0
 
-
-    # no activation checkpointing for embeddings
+    # No activation checkpointing for embeddings
     embedding_flops = 6 * args.tokens * args.hidden_size * args.vocab_size
 
     if args.mamba_moe_layers == "":
         # assume a pure mamba1 model unless specified otherwise
-        total_flops = embedding_flops + (mamba_flops * args.num_mamba_layers)
-        total_mamba_flops += mamba_flops * args.num_mamba_layers)
+        total_flops = embedding_flops + (mamba1_flops * args.num_mamba_layers)
+        total_mamba1_flops = mamba1_flops * args.num_mamba_layers
+        
         # if MoE layers add these in
         if args.num_moe_layers > 0:
-            ffn_flops = iter_factor * args.tokens  * 4 * args.ffn_hidden_size * args.num_moe_layers * args.hidden_size
+            ffn_flops = iter_factor * args.tokens * 4 * args.ffn_hidden_size * args.num_moe_layers * args.hidden_size
             if args.swiglu:
                 ffn_flops = 3/2 * ffn_flops
             gating_flops = iter_factor * 2 * args.tokens * args.num_experts * args.num_moe_layers
@@ -165,54 +204,49 @@ def calc_flops(args):
             total_ffn_flops += ffn_flops
         
     else:
-        arch_list = args.mamba_moe_layers.split(" ")
-        total_flops = 0
-        total_flops += embedding_params
-        for el in arch_list:
-            if el == "r":
-                # mamba layer
-                total_flops += mamba_flops
-                total_mamba_flops += mamba_flops
-            elif el == "m":
+        total_flops = embedding_flops
+        for layer_type in args.mamba_moe_layers.split():
+            if layer_type == "r":
+                # mamba1 layer
+                total_flops += mamba1_flops
+                total_mamba1_flops += mamba1_flops
+            elif layer_type == "m":
+                # mamba2 layer
                 total_flops += mamba2_flops
                 total_mamba2_flops += mamba2_flops
-            elif el == "a":
+            elif layer_type == "a":
+                # attention layer
                 total_flops += attention_flops 
                 total_attention_flops += attention_flops
-            elif el.isnumeric():
+            elif layer_type.isnumeric():
+                # FFN layer
                 total_flops += ffn_flops
                 total_ffn_flops += ffn_flops
-            elif el == "g":
-                # zamba shared layer
+            elif layer_type == "g":
+                # shared layer case
                 original_hidden_size = args.hidden_size
                 args.hidden_size = original_hidden_size * 2
-                shared_attention_flops = compute_attention_flops(args)
+                shared_attention_flops = compute_attention_flops(args, iter_factor)
                 shared_ffn_flops = compute_ffn_flops(args)
-                total_flops += shared_attention_flops
+                total_flops += shared_attention_flops + shared_ffn_flops
                 total_attention_flops += shared_attention_flops
-                total_flops += shared_ffn_flops
-                total_ffn_flops = shared_ffn_flops
+                total_ffn_flops += shared_ffn_flops
                 args.hidden_size = original_hidden_size
                 # final downprojector matrix
                 total_flops += 4 * args.batch_size * args.sequence_length * args.hidden_size * args.hidden_size
             else:
-                raise ValueError("Invalid layer string: " + str(el) " not recognized.")
+                raise ValueError(f"Invalid layer type: {layer_type}")
     
-    total_flops *= iter_factor
-
-    print(f'Calculating number of FLOPs with training configuration: {vars(args)}\n')
-    print(f'Total Mamba FLOPs: {convert_flops(total_mamba_flops)}')
+    # Print results
+    print(f'\nCalculating number of FLOPs with training configuration: {vars(args)}\n')
+    print(f'Total Mamba1 FLOPs: {convert_flops(total_mamba1_flops)}')
     print(f'Total Mamba2 FLOPs: {convert_flops(total_mamba2_flops)}')
     print(f'Total Attention FLOPs: {convert_flops(total_attention_flops)}')
     print(f'Total FFN FLOPs: {convert_flops(total_ffn_flops)}')
     print(f'Embedding FLOPs: {convert_flops(embedding_flops)}')
     print(f'Total FLOPs for the Model: {convert_flops(total_flops)}')
-    if args.tokens is not None:
-        total_flops_through_training = int(total_flops * (args.tokens // args.batch_size))
-        print(f'Total FLOPs through training: {convert_flops(total_flops_through_training)}')
 
 if __name__ == "__main__":
-    print('\nExample: python calc_mamba_moe_flops.py -num-mamba-layers 12 -hs 768 --num-experts 8 --num-moe-layers 12 -s 2048 --tokens 300e9')
-    
+    print('\nExample: python calc_mamba_flops.py --num-mamba-layers 12 -hs 768 --num-experts 8 --num-moe-layers 12 -s 2048 --tokens 300e9')
     args = config_parser().parse_args()
     calc_flops(args)
