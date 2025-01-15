@@ -128,6 +128,8 @@ def compute_mamba2_flops(args):
     mamba2_block_flops += 4 * args.batch_size * args.sequence_length * d_inner * args.state_size
     # State updates
     mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size
+    # Multiply state by C and add Dx
+    mamba2_block_flops += args.batch_size * args.sequence_length * d_inner ( 2 + args.state_size)
     # Output projections
     mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * args.hidden_size
     # Final gating
