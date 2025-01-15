@@ -130,6 +130,8 @@ def compute_mamba2_flops(args):
     mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size
     # Multiply state by C and add Dx
     mamba2_block_flops += args.batch_size * args.sequence_length * d_inner ( 2 + args.state_size)
+    # Gated norm (gate activation + gate-state product + rms norm)
+    mamba2_block_flops += args.batch_size * args.sequence_length * (d_inner + d_inner + 3 * d_inner)
     # Output projections
     mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * args.hidden_size
     # Final gating
