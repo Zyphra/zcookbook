@@ -123,7 +123,7 @@ def compute_mamba2_flops(args):
     # Input projections
     mamba2_block_flops = 2 * (2 * d_inner + 2 * args.mamba_ngroups * args.state_size + Nheads) * args.hidden_size * args.batch_size * args.sequence_length
     # Convolution computations
-    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.conv_dimension * d_inner
+    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.conv_dimension + (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.batch_size * args.sequence_length
     # S4D core computations
     mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * d_inner
     # State updates
