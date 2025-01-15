@@ -1,7 +1,6 @@
 import argparse
 import math
 
-# Helper function to pretty-print message sizes
 def convert_flops(params):
     if params == 0:
         return "0"
@@ -9,7 +8,13 @@ def convert_flops(params):
     i = int(math.floor(math.log(params, 1000)))
     p = math.pow(1000, i)
     s = round(params / p, 2)
-    return f"{s} {size_name[i]}"
+    
+    # Calculate scientific notation
+    sci_exp = int(math.floor(math.log10(params)))
+    sci_coeff = round(params / (10 ** sci_exp), 2)
+    sci_notation = f"{sci_coeff} × 10^{sci_exp}"
+    
+    return f"{s} {size_name[i]} ({sci_notation} FLOPs)"
 
 def config_parser():
     parser = argparse.ArgumentParser()
@@ -129,7 +134,7 @@ def compute_mamba2_flops(args):
     # State updates
     mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size
     # Multiply state by C and add Dx
-    mamba2_block_flops += args.batch_size * args.sequence_length * d_inner ( 2 + args.state_size)
+    mamba2_block_flops += args.batch_size * args.sequence_length * d_inner * (2 + args.state_size)
     # Gated norm (gate activation + gate-state product + rms norm)
     mamba2_block_flops += args.batch_size * args.sequence_length * (d_inner + d_inner + 3 * d_inner)
     # Output projections
@@ -231,7 +236,7 @@ def calc_flops(args):
                 original_hidden_size = args.hidden_size
                 args.hidden_size = original_hidden_size * 2
                 shared_attention_flops = compute_attention_flops(args, iter_factor)
-                shared_ffn_flops = compute_ffn_flops(args)
+                shared_ffn_flops = compute_ffn_flops(args, iter_factor)
                 total_flops += shared_attention_flops + shared_ffn_flops
                 total_attention_flops += shared_attention_flops
                 total_ffn_flops += shared_ffn_flops
