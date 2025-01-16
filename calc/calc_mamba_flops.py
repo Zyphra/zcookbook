@@ -140,7 +140,6 @@ def compute_mamba2_flops(args, iter_factor):
     mamba2_block_flops += (d_inner + d_inner + 3 * d_inner)
     # Output projections
     mamba2_block_flops += 2 * d_inner * args.state_size * args.hidden_size
-    # Final gating
     mamba2_block_flops += args.hidden_size
     return mamba2_block_flops * args.tokens
 
