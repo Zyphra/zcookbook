@@ -158,7 +158,7 @@ def compute_shared_attention_flops(args, iter_factor):
     attention_matrix_flops = 2 * args.batch_size * args.sequence_length**2 * attention_hidden_size
     attention_over_values_flops = 2 * args.batch_size * args.sequence_length**2 * attention_hidden_size
     linear_projection_flops = 2 * args.batch_size * attention_hidden_size * args.hidden_size
-    return iter_factor * (qkv_flops + attention_matrix_flops + attention_over_values_flops + linear_projection_flops)
+    return iter_factor * (qkv_flops + attention_matrix_flops + attention_over_values_flops + linear_projection_flops) * (args.tokens / (args.batch_size * args.sequence_length))
 
 def compute_ffn_flops(args, iter_factor):
     # If custom FFN hidden size is provided, use that
