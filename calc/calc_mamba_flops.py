@@ -244,7 +244,7 @@ def calc_flops(args):
                 # shared layer case
                 original_hidden_size = args.hidden_size
                 args.hidden_size = original_hidden_size * 2
-                shared_attention_flops = compute_attention_flops(args, iter_factor)
+                shared_attention_flops = compute_shared_attention_flops(args, iter_factor)
                 shared_ffn_flops = compute_ffn_flops(args, iter_factor)
                 total_flops += shared_attention_flops + shared_ffn_flops
                 total_attention_flops += shared_attention_flops
