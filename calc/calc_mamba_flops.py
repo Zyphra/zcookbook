@@ -1,6 +1,7 @@
 import argparse
 import math
 
+# Helper function to pretty-print message sizes
 def convert_flops(params):
     if params == 0:
         return "0"
@@ -112,44 +113,44 @@ def compute_mamba1_flops(args, iter_factor):
     dt_rank = math.ceil(args.hidden_size / 16) if args.dt_rank == "auto" else int(args.dt_rank)
     
     # SSM state computation
-    ssm_flops = iter_factor * d_inner * args.tokens * (11 * args.state_size + 4 * dt_rank + 1)
+    ssm_flops = iter_factor * d_inner * (11 * args.state_size + 4 * dt_rank + 1)
     # Input and output projections
-    mamba_projectors_flops = iter_factor * args.tokens * 6 * d_inner * args.hidden_size 
+    mamba_projectors_flops = iter_factor * 6 * d_inner * args.hidden_size 
     # Convolution operations
-    mamba_conv_flops = iter_factor * args.tokens * 2 * d_inner * args.conv_dimension
+    mamba_conv_flops = iter_factor * 2 * d_inner * args.conv_dimension
     
     mamba1_flops = ssm_flops + mamba_projectors_flops + mamba_conv_flops
-    return mamba1_flops
+    return mamba1_flops * args.tokens
 
-def compute_mamba2_flops(args):
+def compute_mamba2_flops(args, iter_factor):
     d_inner = args.hidden_size * args.expansion_factor
     Nheads = d_inner // args.mamba_headdim
     
     # Input projections
-    mamba2_block_flops = 2 * (2 * d_inner + 2 * args.mamba_ngroups * args.state_size + Nheads) * args.hidden_size * args.batch_size * args.sequence_length
+    mamba2_block_flops = 2 * (2 * d_inner + 2 * args.mamba_ngroups * args.state_size + Nheads) * args.hidden_size
     # Convolution computations
-    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.conv_dimension + (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.batch_size * args.sequence_length
+    mamba2_block_flops += 2 * (d_inner + 2 * args.mamba_ngroups * args.state_size) * args.conv_dimension + (d_inner + 2 * args.mamba_ngroups * args.state_size)
     # S4D core computations
-    mamba2_block_flops += 4 * args.batch_size * args.sequence_length * d_inner * args.state_size
+    mamba2_block_flops += 4* d_inner * args.state_size
     # State updates
-    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size
+    mamba2_block_flops += 2 * d_inner * args.state_size
     # Multiply state by C and add Dx
-    mamba2_block_flops += args.batch_size * args.sequence_length * d_inner * (2 + args.state_size)
+    mamba2_block_flops += d_inner * (2 + args.state_size)
     # Gated norm (gate activation + gate-state product + rms norm)
-    mamba2_block_flops += args.batch_size * args.sequence_length * (d_inner + d_inner + 3 * d_inner)
+    mamba2_block_flops += (d_inner + d_inner + 3 * d_inner)
     # Output projections
-    mamba2_block_flops += 2 * args.batch_size * args.sequence_length * d_inner * args.state_size * args.hidden_size
+    mamba2_block_flops += 2 * d_inner * args.state_size * args.hidden_size
     # Final gating
-    mamba2_block_flops += args.batch_size * args.sequence_length * args.hidden_size
-    return mamba2_block_flops
+    mamba2_block_flops += args.hidden_size
+    return mamba2_block_flops * args.tokens
 
 def compute_attention_flops(args, iter_factor):
     # An A_(m x k) X B_(k x n) matrix multiplication requires 2m x k x n FLOPs (multiplies and adds)
-    qkv_flops = int(iter_factor * 2 * (1 + 2 * args.kv_size_ratio) * args.batch_size * args.hidden_size * args.hidden_size)
-    attention_matrix_flops = iter_factor * 2 * args.batch_size * args.sequence_length * args.hidden_size
-    attention_over_values_flops = iter_factor * 2 * args.batch_size * args.sequence_length * args.hidden_size
-    linear_projection_flops = iter_factor * 2 * args.batch_size * args.hidden_size * args.hidden_size
-    return qkv_flops + attention_matrix_flops + attention_over_values_flops + linear_projection_flops 
+    qkv_flops = int(iter_factor * 2 * (1 + 2 * args.kv_size_ratio) * args.hidden_size * args.hidden_size)
+    attention_matrix_flops = iter_factor * 2 * args.hidden_size
+    attention_over_values_flops = iter_factor * 2 * args.hidden_size
+    linear_projection_flops = iter_factor * 2 * args.hidden_size * args.hidden_size
+    return args.tokens * (qkv_flops + attention_matrix_flops + attention_over_values_flops + linear_projection_flops)
 
 def compute_ffn_flops(args, iter_factor):
     # If custom FFN hidden size is provided, use that
@@ -160,14 +161,14 @@ def compute_ffn_flops(args, iter_factor):
         intermediate_dim = args.hidden_size * args.ffn_expansion_factor
     
     # Calculate FFN FLOPs based on number of linear layers
-    ffn_flops = int(iter_factor * 2 * args.num_mlp_linears * args.batch_size * args.sequence_length * 
+    ffn_flops = int(iter_factor * 2 * args.num_mlp_linears * 
                     args.hidden_size * intermediate_dim)
     
     if args.swiglu:
         # For SwiGLU, add 50% more FLOPs to account for the extra gating computation
         ffn_flops = int(ffn_flops * 1.5)
         
-    return ffn_flops
+    return ffn_flops * args.tokens
 
 def calc_flops(args):
     if args.num_experts > 1:
@@ -185,7 +186,7 @@ def calc_flops(args):
 
     # Calculate component FLOPs
     mamba1_flops = compute_mamba1_flops(args, iter_factor)
-    mamba2_flops = compute_mamba2_flops(args)
+    mamba2_flops = compute_mamba2_flops(args, iter_factor)
     attention_flops = compute_attention_flops(args, iter_factor)
     ffn_flops = compute_ffn_flops(args, iter_factor)
 
@@ -242,7 +243,7 @@ def calc_flops(args):
                 total_ffn_flops += shared_ffn_flops
                 args.hidden_size = original_hidden_size
                 # final downprojector matrix
-                total_flops += 4 * args.batch_size * args.sequence_length * args.hidden_size * args.hidden_size
+                total_flops += 4 * args.hidden_size * args.hidden_size
             else:
                 raise ValueError(f"Invalid layer type: {layer_type}")
     
