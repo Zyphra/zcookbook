@@ -247,7 +247,6 @@ def calc_flops(args):
                 total_flops += shared_attention_flops + shared_ffn_flops
                 total_attention_flops += shared_attention_flops
                 total_ffn_flops += shared_ffn_flops
-                args.hidden_size = original_hidden_size
                 # final downprojector matrix
                 total_flops += 4 * args.hidden_size * args.hidden_size
             else:
