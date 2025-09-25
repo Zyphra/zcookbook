@@ -4,15 +4,15 @@ Here we present a walk-through of how to compute the parameters and FLOPs for a 
 
 ## Dense Transformer Parameters
 
-Let us first figure out how many parameters a given transformer has with a certain embedding dimension h, depth, l, vocab size V, and sequence length s. To do so, we walk systematically through every parameter.
+Let us first figure out how many parameters a given transformer has with a certain embedding dimension $h$, number of layers $L$, vocab size $V$, and sequence length $s$. To do so, we walk systematically through every parameter.
 
 1.) First we have the embedding which has $$V \times h$$  parameters. If the embedding and unembedding weights are untied there are two of these, but let's assume they're tied for our analysis.
 
-2.) We now have the QKVO attention matrices. Each one is of dimension $$h \times h$$ for $$4h^2$$ parameters in total.
+2.) We now have the QKVO attention matrices. Each one is of dimension $$h \times h$$ for $$4h^2$$ parameters in total for the attention block.
 
-3.) Next we have the MLP layers of which we have two: mlp_in with $$h \times 4h$$ parameters and mlp_out with $$4h \times h$$ parameters (assuming the usual expansion factor of 4). In total, this gives us $$8h^2$$ parameters for th
+3.) Next we have the MLP blocks of which we have two: mlp_in with $$h \times 4h$$ parameters and mlp_out with $$4h \times h$$ parameters (assuming the usual expansion factor of 4). In total, this gives us $$8h^2$$ parameters for the MLP block.
 
-4.) We have layernorm parameters (gains and biases) on each of the Q,K,V and mlp_in matrices which gives us $$8h$$ parameters 
+4.) We have layernorm parameters (gains and biases) on each of the Q,K,V and mlp_in matrices which gives us $$8h$$ parameters.
 
 Now that we have the parameters per layer we simply have to multiply by the number of layers $$L$$ to obtain the total number of parameters contributed from attention, MLPs, and per-layer norms.
 
