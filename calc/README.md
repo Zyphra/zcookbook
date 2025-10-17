@@ -50,7 +50,7 @@ The dense matrix operations in attention have a very similar structure to the ML
 
 ### Attention Scores and Output FLOPs
 
-To compute the attention matrix, we are multiplying together two $b \times s \times h$ matrices to compute an $$b \times s \times s$$ output. The FLOP cost of this is approximately $$2 \times b \times h \times s \times s$$ . The output of the attention (multiplication of V by the attention scores) has an equal cost. We ignore the cost of performing the softmax although this may be nontrivial. This results in a total attention cost of $$4bhs^2$$ for a total step cost of $$12bhs^2$$ FLOPs.
+To compute the attention matrix, we are multiplying together two $b \times s \times h$ matrices to compute an $$b \times s \times s$$ output. The FLOP cost of this is approximately $$2 \times b \times h \times s \times s$$ . The output of the attention (multiplication of V by the attention scores) has an equal cost. We ignore the cost of performing the softmax although this may be nontrivial. This results in a total attention cost per layer of $$4bhs^2$$ for a total step cost per layer of $$12bhs^2$$ FLOPs.
 
 Putting this together, we see that the total FLOP cost of a transformer model can be estimated (by only accounting for the FLOPs of attention and MLP blocks) as:
 
@@ -58,7 +58,7 @@ $$\begin{align}
 \text{Transformer FLOPs per Step} = 12bLhs^2 + 72bLsh^2
 \end{align}$$
 
-Naively, we thus see that the MLP cost dominates at least as long as the embedding dimension h is larger than the sequence dimension s. For large enough s however, the cost of the attention begins to dominate due to the quadratic dependence of attention on the sequence length.
+Naively, we thus see that the MLP cost dominates until roughly $$s \gtrsim 6h$$; beyond that attention’s $$s^2$$ term dominates. For large enough s however, the cost of the attention begins to dominate due to the quadratic dependence of attention on the sequence length.
 
 ## MoE Flops
 

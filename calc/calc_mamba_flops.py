@@ -144,21 +144,27 @@ def compute_mamba2_flops(args, iter_factor):
     return mamba2_block_flops * args.tokens
 
 def compute_attention_flops(args, iter_factor):
-    # An A_(m x k) X B_(k x n) matrix multiplication requires 2m x k x n FLOPs (multiplies and adds)
-    qkv_flops = int(iter_factor * 2 * (1 + 2 * args.kv_size_ratio) * args.hidden_size * args.hidden_size)
-    attention_matrix_flops = iter_factor * 2 * args.hidden_size
-    attention_over_values_flops = iter_factor * 2 * args.hidden_size
-    linear_projection_flops = iter_factor * 2 * args.hidden_size * args.hidden_size
-    return args.tokens * (qkv_flops + attention_matrix_flops + attention_over_values_flops + linear_projection_flops)
+    steps = int(args.tokens) / (args.batch_size * args.sequence_length)
+    b, s, h, r = args.batch_size, args.sequence_length, args.hidden_size, args.kv_size_ratio
+    qkv    = 2 * b * s * h * h * (1 + 2 * r)  # Q,K,V
+    o_proj = 2 * b * s * h * h                # O
+    scores = 2 * b * s * s * h                # QK^T
+    values = 2 * b * s * s * h                # A·V
+    per_step = iter_factor * (qkv + o_proj + scores + values)
+    return steps * per_step
+
 
 def compute_shared_attention_flops(args, iter_factor):
-    # An A_(m x k) X B_(k x n) matrix multiplication requires 2m x k x n FLOPs (multiplies and adds)
-    attention_hidden_size = 2 * args.hidden_size
-    qkv_flops = 2 * (1 + 2 * args.kv_size_ratio) * args.batch_size * args.sequence_length * attention_hidden_size**2
-    attention_matrix_flops = 2 * args.batch_size * args.sequence_length**2 * attention_hidden_size
-    attention_over_values_flops = 2 * args.batch_size * args.sequence_length**2 * attention_hidden_size
-    linear_projection_flops = 2 * args.batch_size * attention_hidden_size * args.hidden_size
-    return iter_factor * (qkv_flops + attention_matrix_flops + attention_over_values_flops + linear_projection_flops) * (args.tokens / (args.batch_size * args.sequence_length))
+    steps = int(args.tokens) / (args.batch_size * args.sequence_length)
+    b, s, h, r = args.batch_size, args.sequence_length, args.hidden_size, args.kv_size_ratio
+    h2 = 2 * h
+    qkv    = 2 * b * s * h2 * h2 * (1 + 2 * r)
+    o_proj = 2 * b * s * h2 * h   # rectangular down-projection
+    scores = 2 * b * s * s * h2
+    values = 2 * b * s * s * h2
+    per_step = iter_factor * (qkv + o_proj + scores + values)
+    return steps * per_step
+
 
 def compute_ffn_flops(args, iter_factor):
     # If custom FFN hidden size is provided, use that
